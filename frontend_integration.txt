@@ -1,0 +1,174 @@
+
+# Frontend Integration Guide for Zik Backend
+
+This document provides frontend developers with the necessary information to integrate with the Zik backend API.
+
+## 1. Authentication
+
+The backend uses a token-based authentication system with a Cognito User Pool.
+
+### 1.1. Registration
+
+- **Endpoint:** `POST /register`
+- **Description:** Creates a new user account.
+- **Request Body:**
+  ```json
+  {
+    "email": "user@example.com",
+    "password": "Password123",
+    "userName": "testuser"
+  }
+  ```
+- **Password Policy:**
+  - Minimum 8 characters
+  - At least one uppercase letter
+  - At least one lowercase letter
+  - At least one number
+- **Response (Success):**
+  - Status Code: `201`
+  - Body:
+    ```json
+    {
+      "message": "User registered successfully. Please check your email to verify your account.",
+    }
+    ```
+- **Notes:**
+  - After registration, the user will receive an email with a verification link. The user must click this link to verify their email address before they can log in.
+
+### 1.2. Login
+
+- **Endpoint:** `POST /login`
+- **Description:** Authenticates a user and returns JWT tokens.
+- **Request Body:**
+  ```json
+  {
+    "email": "user@example.com",
+    "password": "Password123"
+  }
+  ```
+- **Response (Success):**
+  - Status Code: `200`
+  - Body:
+    ```json
+    {
+        "message": "Login successful",
+        "token": "...",
+        "refreshToken": "..."
+    }
+    ```
+- **Token Usage:**
+  - The `token` is the access token. It should be included in the `Authorization` header for all requests to protected endpoints.
+    ```
+    Authorization: Bearer <token>
+    ```
+  - The `refreshToken` is used to obtain a new access token when the current one expires.
+
+### 1.3. Refresh Token
+
+- **Endpoint:** `POST /refresh-token`
+- **Description:** Refreshes an expired access token.
+- **Request Body:**
+  ```json
+  {
+    "refreshToken": "your-refresh-token"
+  }
+  ```
+- **Response (Success):**
+  - Status Code: `200`
+  - Body:
+    ```json
+    {
+      "message": "Token refreshed successfully",
+      "token": "new-access-token"
+    }
+    ```
+
+### 1.4. Forgot/Reset Password
+
+- **Endpoint:** `POST /forgot-password`
+- **Description:** Initiates the password reset process.
+- **Request Body:**
+  ```json
+  {
+    "email": "user@example.com"
+  }
+  ```
+- **Endpoint:** `POST /reset-password`
+- **Description:** Resets the user's password.
+- **Request Body:**
+  ```json
+  {
+    "token": "reset-token-from-email",
+    "newPassword": "NewPassword123"
+  }
+  ```
+
+## 2. API Endpoints
+
+All endpoints below require authentication. The base URL for the API is provided by the API Gateway URL.
+
+### 2.1. Goals
+
+- **`POST /goals`**: Create a new goal.
+- **`GET /goals`**: Get all goals for the authenticated user.
+- **`GET /goals/{goalId}`**: Get a specific goal.
+- **`PUT /goals/{goalId}`**: Update a goal.
+- **`DELETE /goals/{goalId}`**: Delete a goal.
+
+### 2.2. Tasks
+
+- **`POST /tasks`**: Create a new task.
+- **`GET /tasks`**: Get all tasks for the authenticated user.
+- **`GET /tasks/by-date?date=YYYY-MM-DD`**: Get tasks for a specific date.
+- **`GET /tasks/{taskId}`**: Get a specific task.
+- **`PUT /tasks/{taskId}`**: Update a task.
+- **`DELETE /tasks/{taskId}`**: Delete a task.
+
+## 3. Data Models
+
+### 3.1. User
+
+```json
+{
+  "userId": "string",
+  "email": "string",
+  "userName": "string"
+}
+```
+
+### 3.2. Goal
+
+```json
+{
+  "goalId": "string",
+  "userId": "string",
+  "title": "string",
+  "description": "string",
+  "createdAt": "ISO-8601-string",
+  "updatedAt": "ISO-8601-string"
+}
+```
+
+### 3.3. Task
+
+```json
+{
+  "taskId": "string",
+  "userId": "string",
+  "goalId": "string", // Optional
+  "title": "string",
+  "description": "string",
+  "dueDate": "YYYY-MM-DD",
+  "completed": "boolean",
+  "createdAt": "ISO-8601-string",
+  "updatedAt": "ISO-8601-string"
+}
+```
+
+## 4. Error Handling
+
+- **`400 Bad Request`**: The request was malformed (e.g., missing required fields, invalid data format).
+- **`401 Unauthorized`**: The request lacks a valid access token.
+- **`403 Forbidden`**: The user is not authorized to perform the requested action.
+- **`404 Not Found`**: The requested resource does not exist.
+- **`500 Internal Server Error`**: An unexpected error occurred on the server.

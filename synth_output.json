@@ -1,0 +1,1 @@
+ERROR: error during connect: Head "http://%2F%2F.%2Fpipe%2FdockerDesktopLinuxEngine/_ping": got 1 SIGTERM/SIGINTs, forcing shutdown

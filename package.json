@@ -1,0 +1,55 @@
+{
+  "name": "zik-backend",
+  "version": "0.1.0",
+  "bin": {
+    "zik-backend": "bin/zik-backend.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "test": "jest --testPathPatterns=\"(e2e)\\.test\\.ts\"",
+    "test:e2e": "cross-env NODE_ENV=test RELAX_RATE_LIMITS=true jest --testPathPatterns=\"e2e\\.test\\.ts\"",
+    "test:e2e:production": "jest --testPathPatterns=\"e2e\\.test\\.ts\"",
+    "test:legacy": "jest --runInBand --testPathPatterns=\"(e2e)\\.test\\.ts\"",
+    "test:unit": "jest --testPathPatterns=\"unit\\.test\\.ts\"",
+    "test:infrastructure": "jest --testPathPatterns=\"infrastructure\\.test\\.ts\"",
+    "test:all": "jest --testPathPatterns=\"test/\"",
+    "test:validate": "node test/setup-validator.js",
+    "test:summary": "node test/summary.js",
+    "cdk": "cdk"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.830.0",
+    "@types/aws-lambda": "^8.10.149",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jest": "^30.0.0",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "24.0.2",
+    "@types/uuid": "^10.0.0",
+    "aws-cdk": "2.1018.1",
+    "aws-sdk-client-mock-jest": "^4.1.0",
+    "chalk": "^5.4.1",
+    "cross-env": "^7.0.3",
+    "jest": "^30.0.0",
+    "ts-jest": "^29.4.0",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.20.3",
+    "typescript": "~5.8.3"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.828.0",
+    "@aws-sdk/client-secrets-manager": "^3.828.0",
+    "@aws-sdk/client-ses": "^3.828.0",
+    "@aws-sdk/lib-dynamodb": "^3.828.0",
+    "@aws-sdk/util-dynamodb": "^3.828.0",
+    "aws-cdk-lib": "^2.201.0",
+    "aws-lambda": "^1.0.7",
+    "aws-sdk-client-mock": "^4.1.0",
+    "axios": "^1.10.0",
+    "bcryptjs": "^3.0.2",
+    "constructs": "^10.4.2",
+    "dotenv": "^16.5.0",
+    "jsonwebtoken": "^9.0.2",
+    "uuid": "^11.1.0"
+  }
+}
