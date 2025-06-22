@@ -1,0 +1,325 @@
+Prompt Engineering for Claude 3 Haiku
+
+The prompt is the "source code" for the AI. It must be precise, comprehensive, and clear.
+
+a. Optimal System Prompt:
+
+"""
+You are Zik, a proactive AI life companion. Your mission is to help your user, [User's Name], turn their ambitious goals into clear, achievable daily actions.
+
+Your persona is:
+- Empathetic and Encouraging: You are a source of positive reinforcement. Celebrate small wins.
+- A Clear-Thinking Strategist: You help break down complex problems into simple steps.
+- Patient and Non-Judgmental: There are no failures, only learning opportunities. If a user misses a quest, help them adjust the plan without guilt.
+
+Rules:
+- Keep your responses concise and mobile-friendly.
+- Use emojis to add warmth and encouragement. 🚀✨👍 e.t.c
+- Never give medical, financial, or legal advice. You are a coach, not a licensed professional.
+- Your primary function is to manage the user's goals using the tools you have available.
+
+You have access to a set of tools to help you. When the user's request requires an action like creating, updating, or deleting a goal or task, you must use the `manage_quest` tool. Think step-by-step about whether a tool is needed. If so, construct the correct JSON call. Otherwise, respond naturally as Zik.
+
+
+b. Tool Schema Definition (to be included in the prompt):
+
+Generated json
+{
+  "tool_spec": {
+    "tools": [
+      {
+        "name": "manage_quest",
+        "description": "Manages a user's goals ('Epic Quests') and daily tasks ('Daily Quests'). Use this to create, update, or delete any goal or task. Do not use for general conversation.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "operation": {
+              "type": "string",
+              "description": "The action to perform.",
+              "enum": ["create", "update", "delete"]
+            },
+            "questType": {
+              "type": "string",
+              "description": "The type of entity to manage.",
+              "enum": ["epic", "daily"]
+            },
+            "title": {
+              "type": "string",
+              "description": "The title of the quest. Required for 'create'."
+            },
+            "questId": {
+              "type": "string",
+              "description": "The unique ID of the quest to update or delete. Required for 'update' and 'delete'."
+            },
+            "epicId": {
+              "type": "string",
+              "description": "The ID of the parent 'Epic Quest' this daily quest belongs to."
+            },
+            "dueDate": {
+              "type": "string",
+              "description": "The date for a daily quest in YYYY-MM-DD format."
+            },
+            "recurrenceRule": {
+              "type": "string",
+              "description": "A simplified rule for recurring tasks, e.g., 'daily', 'weekdays', 'weekly'."
+            },
+            "updateFields": {
+              "type": "object",
+              "description": "A JSON object of fields to change for an 'update' operation."
+            }
+          },
+          "required": ["operation", "questType"]
+        }
+      }
+    ]
+  }
+}
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+Json
+IGNORE_WHEN_COPYING_END
+
+c. Sample Bedrock API Payloads:
+
+Scenario 1: Free-text Response
+
+User Input: "I'm feeling really stressed about my exams."
+
+Expected Zik Response (Text): "I hear you, exam periods can be really tough. Remember to take deep breaths. Let's make sure we schedule some break time for you today. How does that sound? ✨"
+
+Scenario 2: Tool-Invocation Response
+
+User Input: "Hey Zik, can you create a new epic quest for me to learn piano?"
+
+Expected Zik Response (Tool Call):
+
+Generated xml
+<tool_use>
+  {
+    "tool": "manage_quest",
+    "input": {
+      "operation": "create",
+      "questType": "epic",
+      "title": "Learn Piano"
+    }
+  }
+</tool_use>
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+Xml
+IGNORE_WHEN_COPYING_END
+3. Orchestration Layer Design (chatHandler Lambda)
+
+a. Responsibilities:
+
+Authentication: Validate the JWT token passed in the request header to identify the userId. Reject unauthorized requests.
+
+Parallel Context Fetching: To minimize latency, execute all initial database reads concurrently using Promise.all.
+
+Fetch User Profile (for name, preferences).
+
+Fetch active "Epic Quests" (to provide goal context).
+
+Fetch "Daily Quests" for today (to know what's on the user's plate).
+
+Fetch the last 5-10 messages of chat history.
+
+Bedrock API Invocation: Assemble the full prompt (System Prompt + Tool Schema + Fetched Context + Chat History + User Input) and call the Bedrock API. Use a streaming response for better frontend UX.
+
+Response Parsing & Dispatch:
+
+Process the streaming response from Bedrock.
+
+If the response stream contains a <tool_use> block, parse the JSON and route it to the tool execution logic.
+
+If it's plain text, stream it directly back to the client.
+
+Tool Execution (DynamoDB Operations): If a tool is called, perform the required PutItem, UpdateItem, or DeleteItem operation on the appropriate DynamoDB table (Goals or Tasks).
+
+Confirmation Response: After executing a tool, generate a final, user-facing confirmation message (e.g., "Got it! I've created your Epic Quest: 'Learn Piano' 🎹") and send it to the client.
+
+b. Asynchronous Orchestration Flow (Pseudocode):
+
+Generated typescript
+// lambda_function.ts
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { BedrockRuntimeClient, InvokeModelWithResponseStreamCommand } from "@aws-sdk/client-bedrock-runtime";
+
+export async function chatHandler(event) {
+  try {
+    // 1. Authenticate and get userId from JWT
+    const userId = validateToken(event.headers.Authorization);
+
+    // 2. Parallel Context Fetching
+    const [profile, activeEpics, todayQuests, chatHistory] = await Promise.all([
+      db.fetchUserProfile(userId),
+      db.fetchActiveEpics(userId),
+      db.fetchQuestsByDate(userId, new Date()),
+      db.fetchChatHistory(userId, 10)
+    ]);
+
+    // 3. Assemble the full prompt for Bedrock
+    const prompt = buildFullPrompt(profile, activeEpics, todayQuests, chatHistory, event.body.message);
+
+    // 4. Invoke Bedrock with Streaming
+    const responseStream = await bedrock.invokeModelStream(prompt);
+
+    // 5. Process the stream
+    let toolCallJson = "";
+    let isToolCall = false;
+    for await (const chunk of responseStream) {
+      const content = chunk.payload;
+      if (content.includes("<tool_use>")) {
+        isToolCall = true;
+        toolCallJson += extractJsonFromChunk(content);
+      } else if (!isToolCall) {
+        // Stream text response directly back to client via WebSocket or long-poll
+        await client.send(content);
+      }
+    }
+
+    // 6. Execute tool if present
+    if (isToolCall) {
+      const toolInput = JSON.parse(toolCallJson);
+      await executeTool(userId, toolInput);
+
+      // 7. Send confirmation message
+      const confirmationMessage = generateConfirmation(toolInput);
+      await client.send(confirmationMessage);
+    }
+
+    return { statusCode: 200, body: "Stream completed." };
+
+  } catch (error) {
+    console.error("Orchestration failed:", error);
+    return { statusCode: 500, body: "An error occurred." };
+  }
+}
+
+async function executeTool(userId, toolInput) {
+    // Maps the tool call to DynamoDB operations
+    switch (toolInput.operation) {
+        case "create":
+            return db.createQuest(userId, toolInput);
+        case "update":
+            return db.updateQuest(userId, toolInput);
+        case "delete":
+            return db.deleteQuest(userId, toolInput);
+    }
+}
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+TypeScript
+IGNORE_WHEN_COPYING_END
+4. End-to-End Integration Blueprint
+
+a. Final Prompt Assembly Sent to Bedrock:
+
+The body of the Bedrock API call will be a JSON object containing a messages array, constructed as follows:
+
+Generated code
+[
+  {
+    "role": "user",
+    "content": [
+      { "type": "text", "text": "[SYSTEM PROMPT BLOCK]" },
+      { "type": "tool_spec", "tool_spec": { ... [TOOL SCHEMA JSON] ... } },
+      { "type": "text", "text": "---CONTEXT--- \n [FORMATTED CONTEXT BLOCK: Profile, Epics, Today's Quests]" },
+      { "type": "text", "text": "---CHAT HISTORY--- \n [FORMATTED CHAT HISTORY BLOCK]" },
+      { "type": "text", "text": "---USER INPUT--- \n [USER'S LATEST MESSAGE]" }
+    ]
+  },
+  {
+    "role": "assistant",
+    "content": "Okay, I am Zik. I am ready to assist. What can I do for you today?" // Priming the model
+  }
+]
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+IGNORE_WHEN_COPYING_END
+
+b. AWS SDK v3 Call (chatHandler Lambda):
+
+We will use InvokeModelWithResponseStream for the best user experience.
+
+Generated typescript
+import { BedrockRuntimeClient, InvokeModelWithResponseStreamCommand } from "@aws-sdk/client-bedrock-runtime";
+
+const bedrockClient = new BedrockRuntimeClient({ region: "us-east-1" });
+
+const payload = {
+  anthropic_version: "bedrock-2023-05-31",
+  max_tokens: 2048,
+  messages: [ /* Assembled prompt from 4a */ ],
+  system: "You are Zik..." // System prompt can also be passed here
+};
+
+const command = new InvokeModelWithResponseStreamCommand({
+  modelId: "anthropic.claude-3-haiku-20240307-v1:0",
+  contentType: "application/json",
+  accept: "application/json",
+  body: JSON.stringify(payload)
+});
+
+try {
+  const responseStream = await bedrockClient.send(command);
+  // ... loop through responseStream.body as shown in pseudocode ...
+} catch (error) {
+  if (error.name === 'ThrottlingException') {
+    // Implement exponential backoff and retry logic
+  } else {
+    // Handle other errors
+  }
+}
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+TypeScript
+IGNORE_WHEN_COPYING_END
+
+c. Mapping Bedrock tool_use to DynamoDB Operations:
+
+The executeTool function is the final link.
+
+Input: A parsed JSON object like { operation: 'create', questType: 'epic', title: 'Learn Piano' }.
+
+Logic:
+
+IF operation is "create":
+
+IF questType is "epic":
+
+Generate a new goalId.
+
+Construct a PutCommand for the Goals table with PK: userId, SK: goalId, title, and status: 'active'.
+
+IF questType is "daily":
+
+Generate a new taskId.
+
+Construct a PutCommand for the Tasks table with PK: userId, SK: taskId, title, dueDate, epicId (if provided), etc.
+
+IF operation is "update":
+
+Use the provided questId.
+
+Determine the table based on the prefix of questId (e.g., goal_ or task_).
+
+Construct an UpdateCommand with the updateFields object to build the UpdateExpression (e.g., SET #title = :title).
+
+IF operation is "delete":
+
+Use the provided questId.
+
+Determine the table.
+
+Construct a DeleteCommand.
