@@ -233,6 +233,53 @@ export class ZikBackendStack extends cdk.Stack {
       authorizer: cognitoAuthorizer,
     });
 
+    // --- Chat Handler Lambda - Handles AI-powered chat interactions ---
+    const chatHandler = new NodejsFunction(this, 'ChatHandler', {
+      ...commonLambdaProps,
+      entry: path.join(lambdaBaseDir, '../src/lambda/chatHandler/index.ts'),
+      handler: 'handler',
+      environment: {
+        GOALS_TABLE_NAME: goalsTable.tableName,
+        TASKS_TABLE_NAME: tasksTable.tableName,
+        CHAT_MESSAGES_TABLE_NAME: chatMessagesTable.tableName,
+        USERS_TABLE_NAME: usersTable.tableName,
+        RECURRENCE_RULES_TABLE_NAME: recurrenceRulesTable.tableName,
+        USER_ID_DUE_DATE_INDEX: tasksUserDueDateIndexName,
+        USER_POOL_ID: userPool.userPoolId,
+        USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
+      },
+    });
+
+    // Grant permissions to the chat handler Lambda
+    goalsTable.grantReadWriteData(chatHandler);
+    tasksTable.grantReadWriteData(chatHandler);
+    chatMessagesTable.grantReadWriteData(chatHandler);
+    usersTable.grantReadData(chatHandler);
+    recurrenceRulesTable.grantReadWriteData(chatHandler);
+
+    // Grant Cognito permissions for token verification
+    userPool.grant(chatHandler, 'cognito-idp:GetUser');
+
+    // Grant Bedrock permissions for AI interactions
+    chatHandler.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'bedrock:InvokeModel',
+          'bedrock:InvokeModelWithResponseStream',
+        ],
+        resources: ['*'], // In production, be more specific
+      })
+    );
+
+    // Chat endpoint for AI-powered conversations
+    httpApi.addRoutes({
+      path: '/chat',
+      methods: [apigatewayv2.HttpMethod.POST],
+      integration: new HttpLambdaIntegration('ChatIntegration', chatHandler),
+      authorizer: cognitoAuthorizer,
+    });
+
     // --- CDK Outputs ---
     new cdk.CfnOutput(this, 'ApiEndpointOutput', {
       value: httpApi.url!,

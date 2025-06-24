@@ -517,6 +517,23 @@ const handleUpdateQuest = async (
   }
 };
 
+/**
+ * Main Lambda handler function for quest management operations
+ *
+ * This handler provides CRUD operations for Epic Quests (goals) and Daily Quests (tasks).
+ * It supports both REST API and HTTP API v2 event formats from API Gateway.
+ *
+ * Supported operations:
+ * - POST /quests - Create new quest (goal or task)
+ * - GET /quests - Retrieve tasks by date
+ * - PUT /quests/{questId} - Update existing quest
+ * - DELETE /quests/{questId} - Delete quest
+ *
+ * All operations require valid Cognito JWT authentication and enforce user isolation.
+ *
+ * @param event - API Gateway proxy event (supports both REST API and HTTP API v2 formats)
+ * @returns Promise<APIGatewayProxyResult> - Standardized HTTP response with CORS headers
+ */
 export const handler = async (
   event: APIGatewayProxyEvent | any // Allow any to handle HTTP API v2 format
 ): Promise<APIGatewayProxyResult> => {

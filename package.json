@@ -7,13 +7,15 @@
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
-    "test": "jest --testPathPatterns=\"(e2e)\\.test\\.ts\"",
-    "test:e2e": "cross-env NODE_ENV=test RELAX_RATE_LIMITS=true jest --testPathPatterns=\"e2e\\.test\\.ts\"",
-    "test:e2e:production": "jest --testPathPatterns=\"e2e\\.test\\.ts\"",
-    "test:legacy": "jest --runInBand --testPathPatterns=\"(e2e)\\.test\\.ts\"",
-    "test:unit": "jest --testPathPatterns=\"unit\\.test\\.ts\"",
+    "test": "jest",
+    "test:unit": "jest --testPathPatterns=\"src/.*\\.test\\.ts\"",
+    "test:integration": "jest --testPathPatterns=\"src/lambda/.*\\.test\\.ts\"",
     "test:infrastructure": "jest --testPathPatterns=\"infrastructure\\.test\\.ts\"",
-    "test:all": "jest --testPathPatterns=\"test/\"",
+    "test:all": "jest",
+    "test:coverage": "jest --coverage",
+    "test:watch": "jest --watch",
+    "test:services": "jest --testPathPatterns=\"src/services/.*\\.test\\.ts\"",
+    "test:utils": "jest --testPathPatterns=\"src/utils/.*\\.test\\.ts\"",
     "test:validate": "node test/setup-validator.js",
     "test:summary": "node test/summary.js",
     "cdk": "cdk"
@@ -37,6 +39,7 @@
     "typescript": "~5.8.3"
   },
   "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.830.0",
     "@aws-sdk/client-dynamodb": "^3.828.0",
     "@aws-sdk/client-secrets-manager": "^3.828.0",
     "@aws-sdk/client-ses": "^3.828.0",
@@ -51,6 +54,7 @@
     "constructs": "^10.4.2",
     "dotenv": "^16.5.0",
     "jsonwebtoken": "^9.0.2",
+    "node-fetch": "^2.7.0",
     "uuid": "^11.1.0"
   }
 }
