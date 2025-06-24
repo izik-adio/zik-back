@@ -221,10 +221,8 @@ export async function handler(
               }
             );
             continue; // Skip invalid quest types
-          }
-
-          // GUARDRAIL 5: Validate tool name
-          if (call.tool !== 'manage_quest') {
+          } // GUARDRAIL 5: Validate tool name
+          if (call.tool !== 'get_quests' && call.tool !== 'modify_quest') {
             Logger.warn(
               'AI attempted to call unknown tool. Blocking tool call.',
               {
@@ -256,12 +254,34 @@ export async function handler(
             rawToolCall: JSON.stringify(firstValidToolCall),
             toolCallInput: JSON.stringify(firstValidToolCall.input),
           });
-
-          const confirmationMessage = await executeTool(
+          const toolResult = await executeTool(
             userId,
+            firstValidToolCall.tool,
             firstValidToolCall.input
           );
-          finalResponse = confirmationMessage;
+
+          // Handle different tool response types
+          if (firstValidToolCall.tool === 'get_quests') {
+            // For get_quests, the result is data that needs to be processed by the AI
+            // We need to make another call to Bedrock with this data
+            Logger.info('Get_quests tool executed, processing data with AI', {
+              requestId,
+              userId,
+              dataLength: toolResult.length,
+            });
+
+            // Create a follow-up prompt with the tool result
+            const followUpPrompt = buildPrompt(
+              context,
+              `Here is the quest data you requested: ${toolResult}\n\nBased on this data, please provide a helpful response to the user's original question: "${userMessage}"`
+            );
+
+            const followUpResponse = await invokeBedrock(followUpPrompt);
+            finalResponse = followUpResponse.response;
+          } else {
+            // For modify_quest, the result is already a user-friendly message
+            finalResponse = toolResult;
+          }
 
           Logger.info('Tool execution completed', { requestId, userId });
         } else {

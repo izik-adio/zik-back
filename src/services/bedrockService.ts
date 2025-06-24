@@ -15,149 +15,163 @@ const bedrockClient = new BedrockRuntimeClient({
   region: config.bedrockRegion,
 });
 
-// Tool Schema Definition for manage_quest (Bedrock format)
-const MANAGE_QUEST_TOOLS = [
-  {
-    name: 'manage_quest',
-    description:
-      "Manages a user's goals ('Epic Quests') and daily tasks ('Daily Quests'). Use this to create, update, or delete any goal or task. Do not use for general conversation.",
-    parameters: {
-      type: 'object',
-      properties: {
-        operation: {
-          type: 'string',
-          description: 'The action to perform.',
-          enum: ['create', 'update', 'delete'],
-        },
-        questType: {
-          type: 'string',
-          description: 'The type of entity to manage.',
-          enum: ['epic', 'daily'],
-        },
-        title: {
-          type: 'string',
-          description: "The title of the quest. Required for 'create'.",
-        },
-        questId: {
-          type: 'string',
-          description:
-            "The unique ID of the quest to update or delete. Required for 'update' and 'delete'.",
-        },
-        epicId: {
-          type: 'string',
-          description:
-            "The ID of the parent 'Epic Quest' this daily quest belongs to.",
-        },
-        dueDate: {
-          type: 'string',
-          description: 'The date for a daily quest in YYYY-MM-DD format.',
-        },
-        recurrenceRule: {
-          type: 'string',
-          description:
-            "A simplified rule for recurring tasks, e.g., 'daily', 'weekdays', 'weekly'.",
-        },
-        updateFields: {
-          type: 'object',
-          description:
-            "A JSON object of fields to change for an 'update' operation.",
-        },
+// NEW: "Read" tool for fetching quests
+const GET_QUESTS_TOOL = {
+  name: 'get_quests',
+  description:
+    "Retrieves a list of a user's quests (daily or epic). Use this to answer any questions about what quests a user has, their status, or their details.",
+  parameters: {
+    type: 'object',
+    properties: {
+      questType: {
+        type: 'string',
+        enum: ['epic', 'daily'],
+        description: 'The type of quests to retrieve',
       },
-      required: ['operation', 'questType'],
+      questId: {
+        type: 'string',
+        description: 'The ID of a specific quest to fetch.',
+      },
+      epicId: {
+        type: 'string',
+        description: 'The ID of a parent Epic Quest to fetch its daily quests.',
+      },
+      dueDate: {
+        type: 'string',
+        description: 'Filter daily quests by a specific date (YYYY-MM-DD).',
+      },
+      status: {
+        type: 'string',
+        enum: ['pending', 'in-progress', 'completed', 'active', 'paused'],
+        description: 'Filter quests by their status',
+      },
     },
+    // No required fields, allowing for broad queries like "get all epics"
   },
-];
+};
+
+// RENAMED & REFINED: The "Write" tool
+const MODIFY_QUEST_TOOL = {
+  name: 'modify_quest',
+  description:
+    "Creates, updates, or deletes a user's quest (daily or epic). Use this ONLY when the user explicitly asks to add, change, remove, complete, or schedule something.",
+  parameters: {
+    type: 'object',
+    properties: {
+      operation: {
+        type: 'string',
+        description: 'The action to perform.',
+        enum: ['create', 'update', 'delete'],
+      },
+      questType: {
+        type: 'string',
+        description: 'The type of entity to manage.',
+        enum: ['epic', 'daily'],
+      },
+      title: {
+        type: 'string',
+        description: "The title of the quest. Required for 'create'.",
+      },
+      questId: {
+        type: 'string',
+        description:
+          "The unique ID of the quest to update or delete. Required for 'update' and 'delete'.",
+      },
+      epicId: {
+        type: 'string',
+        description:
+          "The ID of the parent 'Epic Quest' this daily quest belongs to.",
+      },
+      dueDate: {
+        type: 'string',
+        description: 'The date for a daily quest in YYYY-MM-DD format.',
+      },
+      recurrenceRule: {
+        type: 'string',
+        description:
+          "A simplified rule for recurring tasks, e.g., 'daily', 'weekdays', 'weekly'.",
+      },
+      updateFields: {
+        type: 'object',
+        description:
+          "A JSON object of fields to change for an 'update' operation.",
+      },
+    },
+    required: ['operation', 'questType'],
+  },
+};
+
+// Combine them into a single list for the prompt
+const ZIK_TOOLS = [GET_QUESTS_TOOL, MODIFY_QUEST_TOOL];
 
 /**
  * Constructs the prompt payload for Claude 3 Haiku with tool support
  *
- * This function builds a comprehensive prompt structure that includes:
- * - System instructions for the Zik AI personality
- * - User context (profile, goals, tasks, chat history)
- * - Current user message
- * - Tool definitions for quest management
+ * This function builds a conversational prompt structure that enables the AI to:
+ * - Act as an empathetic life coach rather than a rigid command interpreter
+ * - Use tools intelligently to gather information and perform actions
+ * - Maintain natural conversation flow with proper message history
+ * - Reason step-by-step about user needs rather than just classifying intents
  *
- * @param context - Aggregated context data including user profile, active goals, today's tasks, and chat history
+ * @param context - Aggregated context data including chat history
  * @param userInput - The user's current message/query
  * @returns Formatted payload object ready for Amazon Bedrock API with Claude 3 Haiku model
  */
 export function buildPrompt(context: ContextData, userInput: string): any {
-  const { userProfile, activeGoals, todayTasks, chatHistory } = context;
-
-  // 1. Define the Golden System Prompt
-  const goldenSystemPrompt = `
+  // NEW: The "Coach" System Prompt
+  const newSystemPrompt = `
 <role>
-You are Zik, a friendly, proactive and expert AI life companion. Your persona is encouraging, concise, and direct.
+You are Zik, an expert AI life coach and companion. Your persona is empathetic, encouraging, and intelligent. You help users define, manage, and achieve their goals by breaking them into "Epic Quests" (long-term goals) and "Daily Quests" (tasks).
 </role>
 
-<critical_task>
-Your single most important task is to classify the user's intent into one of two categories: QUERY or ACTION. You must do this for every request.
-
-1.  **QUERY Intent:** The user is asking for information, making a statement, or having a general conversation (including greetings).
-    - **Keywords:** "what", "show", "list", "do I have", "tell me", "hi", "hello", "thanks", "morning".
-    - **Your Instruction:** If the intent is QUERY, you **MUST** answer using **ONLY** the data provided in the \`<context_data>\` block of the user's message. **You MUST NOT use any tools.**
-
-2.  **ACTION Intent:** The user is explicitly asking to create, modify, or delete data.
-    - **Keywords:** "create", "add", "make", "update", "change", "delete", "remove".
-    - **Your Instruction:** If the intent is ACTION, you **MUST** call the \`manage_quest\` tool to fulfill the request.
-
-</critical_task>
+<core_philosophy>
+Your primary goal is to understand and help the user. To do this, you have tools. Think step-by-step.
+1.  **REASON:** First, understand the user's intent. Are they asking a question, stating a feeling, or giving a command?
+2.  **PLAN:** Decide if you need to use tools to help them.
+    - If you need information to answer a question (e.g., "what's on my plate today?"), use the 'get_quests' tool.
+    - If the user explicitly asks to change something (e.g., "create a task," "mark as complete"), use the 'modify_quest' tool.
+3.  **ACT:** Call the necessary tools and then formulate a helpful, encouraging, and concise text response.
+</core_philosophy>
 
 <rules>
-  - Your final text response must be extremely concise (1-2 sentences maximum).
-  - Never explain what you are doing or mention the context. Just give the answer.
-  - **CRITICAL:** Your classification of QUERY/ACTION is for internal reasoning only. **Do not** include the word "QUERY" or "ACTION" in your final response to the user.
-  - Never invent tool operations like "read" or "list". The only valid operations are 'create', 'update', 'delete'.
-  - Never include XML tags in your final output to the user.
+- **Be a Coach, Not a Robot:** Celebrate wins! If a user completes a quest, say "Awesome job!" or "Great work!". If they are struggling, be encouraging and offer to help break the task down.
+- **Be Proactive:** If a user creates a vague Epic Quest, ask clarifying questions to make it more specific (e.g., "That's a great goal! By when would you like to achieve it?").
+- **Concise Responses:** Keep your final text responses to the user brief (1-3 sentences). The user is on a mobile app.
+- **Clarity is Key:** Never mention your tools or the fact that you are an AI. Just provide the helpful result.
+- **Never Make Up Information:** If you don't know the answer, say so or use your tools to find it. Do not invent quest details.
 </rules>
 `;
+  const { chatHistory } = context; // We only need the chat history now
 
-  // 2. Format the context and history blocks in a simplified structure
-  const contextAndHistory = `
-<context_data>
-    User: ${userProfile ? userProfile.firstName : 'N/A'}
-    Active Goals: ${
-      activeGoals.length > 0
-        ? activeGoals
-            .map((g) => `- ${g.goalName} (ID: ${g.goalId})`)
-            .join('\n    ')
-        : 'None'
-    }
-    Today's Tasks: ${
-      todayTasks.length > 0
-        ? todayTasks
-            .map((t) => `- ${t.taskName} (ID: ${t.taskId})`)
-            .join('\n    ')
-        : 'None'
-    }
-    Chat History:
-    ${
-      chatHistory.length > 0
-        ? chatHistory.map((m) => `${m.role}: ${m.content}`).join('\n    ')
-        : 'None'
-    }
-</context_data>
+  // Convert chat history to the proper format for Claude
+  const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
 
-<user_input>
-    ${userInput}
-</user_input>
-`;
+  // Add existing conversation history
+  if (chatHistory && chatHistory.length > 0) {
+    for (const msg of chatHistory) {
+      messages.push({
+        role: msg.role,
+        content: msg.content,
+      });
+    }
+  }
 
-  // 3. Return the final, simplified payload
+  // Add the new user message
+  messages.push({
+    role: 'user',
+    content: userInput,
+  });
+
   return {
     modelId: config.bedrockModelId,
     body: JSON.stringify({
       anthropic_version: 'bedrock-2023-05-31',
       max_tokens: config.maxTokens,
-      temperature: 0.1,
-      system: goldenSystemPrompt, // The new, authoritative system prompt
-      messages: [
-        {
-          role: 'user',
-          content: contextAndHistory, // A simple block of data and the user's request
-        },
-      ],
-      tools: MANAGE_QUEST_TOOLS.map((tool) => ({
+      temperature: 0.2, // Slightly higher for more natural language
+      system: newSystemPrompt, // Our new, powerful prompt
+      messages: messages,
+      tools: ZIK_TOOLS.map((tool) => ({
+        // Use the new toolset
         name: tool.name,
         description: tool.description,
         input_schema: tool.parameters,
@@ -185,8 +199,8 @@ Your single most important task is to classify the user's intent into one of two
  * Invokes Amazon Bedrock Claude 3 Haiku model with streaming response support
  *
  * This function sends the formatted prompt to Claude 3 Haiku and processes the streaming
- * response, handling both text generation and tool usage. It sanitizes the final response
- * to remove classification artifacts and provides structured tool call information.
+ * response, handling both text generation and tool usage. The new implementation supports
+ * the intelligent coaching approach with both read and write tools.
  *
  * @param prompt - The formatted prompt payload created by buildPrompt()
  * @returns Promise<BedrockResponse> - Object containing the AI response text and any tool calls made
@@ -269,15 +283,8 @@ export async function invokeBedrock(prompt: any): Promise<BedrockResponse> {
       }
     }
 
-    // Production Guardrail: Sanitize the final response to remove any potential artifacts
-    let sanitizedResponse = finalResponse.replace(/<[^>]+>/g, '').trim(); // Removes any XML tags
-    sanitizedResponse = sanitizedResponse.replace(/^QUERY\s*/i, '').trim(); // Removes a leading "QUERY"
-    sanitizedResponse = sanitizedResponse.replace(/^ACTION\s*/i, '').trim(); // Removes a leading "ACTION"
-
-    // Additional cleanup for any other classification artifacts
-    sanitizedResponse = sanitizedResponse
-      .replace(/^\s*(QUERY|ACTION)\s*\n?/gi, '')
-      .trim();
+    // Clean response - only remove XML tags, preserve natural language
+    let sanitizedResponse = finalResponse.replace(/<[^>]+>/g, '').trim();
 
     Logger.info('Bedrock response processed', {
       responseLength: sanitizedResponse.length,

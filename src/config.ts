@@ -27,6 +27,11 @@ export const config = {
   maxMessageLength: 5000,
   maxTitleLength: 200,
   defaultChatHistoryLimit: 10,
+
+  // JWT Configuration
+  accessTokenExpiry: '1d',
+  refreshTokenExpiry: '7d',
+  sessionTokenExpiry: '24h',
 } as const;
 
 // Validate required environment variables on module load

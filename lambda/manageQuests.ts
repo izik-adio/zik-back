@@ -236,14 +236,8 @@ const handleGetQuests = async (event: any): Promise<APIGatewayProxyResult> => {
 
     // Get date from query string parameters
     const queryParams = getQueryParameters(event);
-    const date = queryParams?.date;
-
-    if (!date) {
-      return createErrorResponse(
-        400,
-        'Missing required query parameter: date (YYYY-MM-DD)'
-      );
-    }
+    // Default to today's date if not provided, in YYYY-MM-DD format
+    const date = queryParams?.date || new Date().toISOString().split('T')[0];
 
     // Validate date format
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
@@ -254,8 +248,24 @@ const handleGetQuests = async (event: any): Promise<APIGatewayProxyResult> => {
       );
     }
 
-    // Query tasks for the specified date using the GSI
-    const queryParams2: QueryCommandInput = {
+    // 1. Fetch all active Epic Quests (Goals)
+    const goalsQuery: QueryCommandInput = {
+      TableName: GOALS_TABLE_NAME,
+      KeyConditionExpression: 'userId = :userId',
+      FilterExpression: '#status = :active',
+      ExpressionAttributeNames: {
+        '#status': 'status',
+      },
+      ExpressionAttributeValues: {
+        ':userId': userId,
+        ':active': 'active',
+      },
+    };
+    const goalsCommand = new QueryCommand(goalsQuery);
+    const { Items: epicQuests } = await docClient.send(goalsCommand);
+
+    // 2. Fetch Daily Quests for the specified date
+    const tasksQuery: QueryCommandInput = {
       TableName: TASKS_TABLE_NAME,
       IndexName: USER_ID_DUE_DATE_INDEX,
       KeyConditionExpression: 'userId = :userId AND dueDate = :dueDate',
@@ -265,12 +275,16 @@ const handleGetQuests = async (event: any): Promise<APIGatewayProxyResult> => {
       },
     };
 
-    const command = new QueryCommand(queryParams2);
-    const { Items } = await docClient.send(command);
+    const tasksCommand = new QueryCommand(tasksQuery);
+    const { Items: dailyQuests } = await docClient.send(tasksCommand);
 
-    // Return tasks (empty array if no tasks found)
-    const tasks = Items || [];
-    return createSuccessResponse(200, { tasks, date });
+    // 3. Combine into the final response object
+    const response = {
+      epicQuests: epicQuests || [],
+      dailyQuests: dailyQuests || [],
+    };
+
+    return createSuccessResponse(200, response);
   } catch (error) {
     console.error('Error retrieving quests:', error);
     if (error instanceof Error && error.message.includes('token')) {

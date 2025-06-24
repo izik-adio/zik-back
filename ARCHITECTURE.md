@@ -7,31 +7,89 @@ This document describes the refactored architecture of the Zik backend, transfor
 ## Architecture Blueprint
 
 ```
-src/
-├── lambda/
-│   └── chatHandler/
-│       └── index.ts        # Lean orchestrator handler (now ~200 lines)
+Zik/
+├── src/                          # Main source code (clean architecture)
+│   ├── lambda/
+│   │   ├── chatHandler/
+│   │   │   ├── index.ts           # Main chat handler (~200 lines)
+│   │   │   └── __tests__/
+│   │   │       └── index.test.ts  # Comprehensive integration tests
+│   │   └── recurringTaskGenerator/
+│   │       └── index.ts           # Scheduled task generator
+│   │
+│   ├── services/
+│   │   ├── auth/
+│   │   │   ├── authService.ts     # JWT validation and user identity
+│   │   │   └── __tests__/
+│   │   │       └── authService.test.ts
+│   │   ├── bedrockService.ts      # AI service interactions
+│   │   ├── toolExecutor.ts        # Tool execution coordination
+│   │   └── database/
+│   │       ├── client.ts          # Centralized DynamoDB client
+│   │       ├── goals.ts           # Goals CRUD operations
+│   │       ├── tasks.ts           # Tasks CRUD operations
+│   │       ├── chatMessages.ts    # Chat persistence + context aggregation
+│   │       └── __tests__/         # Comprehensive database tests
+│   │           ├── goals.test.ts
+│   │           ├── tasks.test.ts
+│   │           └── chatMessages.test.ts
+│   │
+│   ├── utils/
+│   │   ├── logger.ts              # Structured JSON logging
+│   │   ├── errors.ts              # Custom error classes hierarchy
+│   │   ├── responses.ts           # HTTP response helpers
+│   │   └── __tests__/             # Utility tests
+│   │       ├── logger.test.ts
+│   │       ├── errors.test.ts
+│   │       └── responses.test.ts
+│   │
+│   ├── types/
+│   │   └── index.ts               # Shared TypeScript interfaces
+│   │
+│   └── config.ts                  # Environment configuration management
 │
-├── services/
-│   ├── authService.ts      # JWT validation and user identity logic
-│   ├── bedrockService.ts   # Bedrock client setup, prompt building, and API calls
-│   ├── toolExecutor.ts     # Tool execution coordination
-│   └── database/
-│       ├── client.ts       # Centralized DynamoDB Document Client
-│       ├── goals.ts        # Goals table CRUD operations
-│       ├── tasks.ts        # Tasks table CRUD operations
-│       └── chatMessages.ts # Chat messages table CRUD + context aggregation
+├── lambda/                        # Legacy Lambda handlers (migrated to src/)
+│   ├── manageGoals.ts            # Goals management Lambda
+│   └── manageQuests.ts           # Quests management Lambda
 │
-├── utils/
-│   ├── logger.ts           # Structured logging utility
-│   ├── errors.ts           # Custom error classes
-│   └── responses.ts        # HTTP response helper functions
+├── lib/                          # AWS CDK infrastructure code
+│   └── zik-backend-stack.ts      # CDK stack definition
 │
-├── types/
-│   └── index.ts            # Shared TypeScript interfaces
+├── bin/                          # CDK app entry point
+│   └── zik-backend.ts            # CDK application
 │
-└── config.ts               # Centralized environment variable management
+├── test/                         # Integration and E2E tests
+│
+├── dist/                         # TypeScript build output
+│   ├── lambda/                   # Compiled Lambda functions
+│   └── src/                      # Compiled source modules
+│
+├── cdk.out/                      # CDK build artifacts (generated)
+│
+├── node_modules/                 # Dependencies (generated)
+│
+├── package.json                  # Node.js project configuration
+├── tsconfig.json                 # TypeScript configuration
+├── jest.config.js                # Test configuration
+├── cdk.json                     # CDK configuration
+├── ARCHITECTURE.md              # This documentation
+├── DOCUMENTATION.md             # API and usage documentation
+└── REFACTORING_SUMMARY.md       # Refactoring history and decisions
 ```
+
+### Optional Files (Developer Utilities)
+
+The following files are present but not part of the core architecture:
+
+```
+├── auth-test.js                  # JWT token testing utility
+├── chat-test.js                  # Chat API testing utility
+├── token-utils.js                # Token generation utility
+├── token.json                    # Sample token data
+└── token.txt                     # Token storage file
+```
+
+These can be safely removed if no longer needed for development/testing.
 
 ## Key Improvements
 

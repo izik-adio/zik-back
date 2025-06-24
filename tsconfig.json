@@ -25,6 +25,12 @@
     "allowSyntheticDefaultImports": true,
     "isolatedModules": true
   },
-  "include": ["lambda/**/*.ts", "test/**/*.ts"],
+  "include": [
+    "src/**/*.ts",
+    "lambda/**/*.ts",
+    "test/**/*.ts",
+    "lib/**/*.ts",
+    "bin/**/*.ts"
+  ],
   "exclude": ["node_modules", "cdk.out"]
 }

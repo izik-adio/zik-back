@@ -14,6 +14,8 @@ import * as path from 'path';
 import { Duration } from 'aws-cdk-lib';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
 
 export class ZikBackendStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -179,6 +181,24 @@ export class ZikBackendStack extends cdk.Stack {
     // Grant Cognito permissions for token verification
     userPool.grant(manageQuestsHandler, 'cognito-idp:GetUser');
 
+    // --- Goals Handler Lambda - Handles goal fetching operations ---
+    const manageGoalsHandler = new NodejsFunction(this, 'ManageGoalsHandler', {
+      ...commonLambdaProps,
+      entry: path.join(__dirname, '../lambda/manageGoals.ts'),
+      handler: 'handler',
+      environment: {
+        GOALS_TABLE_NAME: goalsTable.tableName,
+        USER_POOL_ID: userPool.userPoolId,
+        USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
+      },
+    });
+
+    // Grant permissions to the goals handler Lambda
+    goalsTable.grantReadData(manageGoalsHandler);
+
+    // Grant Cognito permissions for token verification
+    userPool.grant(manageGoalsHandler, 'cognito-idp:GetUser');
+
     // Create Cognito JWT Authorizer
     const cognitoAuthorizer = new HttpJwtAuthorizer(
       'CognitoAuthorizer',
@@ -233,6 +253,17 @@ export class ZikBackendStack extends cdk.Stack {
       authorizer: cognitoAuthorizer,
     });
 
+    // Goals Management Routes (Protected with Cognito JWT Authorizer)
+    httpApi.addRoutes({
+      path: '/goals',
+      methods: [apigatewayv2.HttpMethod.GET],
+      integration: new HttpLambdaIntegration(
+        'GetGoalsIntegration',
+        manageGoalsHandler
+      ),
+      authorizer: cognitoAuthorizer,
+    });
+
     // --- Chat Handler Lambda - Handles AI-powered chat interactions ---
     const chatHandler = new NodejsFunction(this, 'ChatHandler', {
       ...commonLambdaProps,
@@ -279,6 +310,46 @@ export class ZikBackendStack extends cdk.Stack {
       integration: new HttpLambdaIntegration('ChatIntegration', chatHandler),
       authorizer: cognitoAuthorizer,
     });
+
+    // --- Recurring Task Generator Lambda (Event-Driven) ---
+    const recurringTaskGeneratorLambda = new NodejsFunction(
+      this,
+      'RecurringTaskGenerator',
+      {
+        ...commonLambdaProps,
+        entry: path.join(__dirname, '../src/lambda/recurringTaskGenerator.ts'),
+        handler: 'handler',
+        environment: {
+          RECURRENCE_RULES_TABLE_NAME: recurrenceRulesTable.tableName,
+          TASKS_TABLE_NAME: tasksTable.tableName,
+          USER_ID_DUE_DATE_INDEX: tasksUserDueDateIndexName,
+        },
+        timeout: Duration.minutes(2), // Allow more time for processing multiple rules
+      }
+    );
+
+    // Grant permissions to the recurring task generator Lambda
+    recurrenceRulesTable.grantReadData(recurringTaskGeneratorLambda);
+    tasksTable.grantWriteData(recurringTaskGeneratorLambda);
+
+    // Create EventBridge rule for daily execution
+    const dailyRecurringTaskRule = new events.Rule(
+      this,
+      'DailyRecurringTaskRule',
+      {
+        schedule: events.Schedule.cron({
+          minute: '0',
+          hour: '5', // Runs at 5:00 AM UTC every day
+        }),
+        description:
+          'Triggers the Zik recurring task generator daily at 5:00 AM UTC',
+      }
+    );
+
+    // Set the Lambda as the target for the EventBridge rule
+    dailyRecurringTaskRule.addTarget(
+      new targets.LambdaFunction(recurringTaskGeneratorLambda)
+    );
 
     // --- CDK Outputs ---
     new cdk.CfnOutput(this, 'ApiEndpointOutput', {

@@ -2,51 +2,191 @@
  * Tool execution service for managing quest operations
  *
  * This service acts as the bridge between AI tool calls and database operations.
- * It validates tool inputs from the AI and executes the appropriate CRUD operations
- * on goals (Epic Quests) and tasks (Daily Quests).
+ * It supports both read operations (get_quests) and write operations (modify_quest)
+ * to enable the AI to act as an intelligent coach rather than a rigid command interpreter.
  */
 import { ToolInput } from '../types';
 import { ValidationError } from '../utils/errors';
 import { Logger } from '../utils/logger';
-import { createGoal, updateGoal, deleteGoal } from './database/goals';
-import { createTask, updateTask, deleteTask } from './database/tasks';
+import {
+  createGoal,
+  updateGoal,
+  deleteGoal,
+  fetchActiveGoals,
+} from './database/goals';
+import {
+  createTask,
+  updateTask,
+  deleteTask,
+  fetchTodayTasks,
+} from './database/tasks';
+import {
+  createRecurrenceRule,
+  updateRecurrenceRule,
+  deleteRecurrenceRule,
+} from './database/recurrenceRules';
 
 /**
  * Validates and executes tool operations for quest management
  *
  * This function processes AI tool calls and translates them into appropriate
- * database operations. It includes comprehensive validation and error handling
- * to ensure data integrity and user security.
+ * database operations. It now supports both read and write operations to enable
+ * the AI to gather information intelligently and perform actions as needed.
  *
  * @param userId - The authenticated user's ID from JWT token
+ * @param toolName - The name of the tool being called ('get_quests' or 'modify_quest')
  * @param toolInput - The tool parameters parsed from AI response
- * @returns Promise<string> - User-friendly confirmation message for the frontend
+ * @returns Promise<string> - User-friendly response for the frontend or tool result data
  * @throws ValidationError - If input validation fails or required fields are missing
  * @throws DatabaseError - If database operation fails
  * @throws NotFoundError - If attempting to update/delete non-existent quest
  */
 export async function executeTool(
   userId: string,
+  toolName: string,
   toolInput: ToolInput
 ): Promise<string> {
-  // Debug logging to see exactly what we received
-  Logger.info('Raw tool input received', {
+  Logger.info('Tool execution requested', {
     userId,
+    toolName,
     toolInput: JSON.stringify(toolInput),
-    hasOperation: !!toolInput.operation,
-    hasQuestType: !!toolInput.questType,
-    inputKeys: Object.keys(toolInput || {}),
   });
 
-  // Validate required fields
+  try {
+    switch (toolName) {
+      case 'get_quests':
+        return await executeGetQuests(userId, toolInput);
+      case 'modify_quest':
+        return await executeModifyQuest(userId, toolInput);
+      default:
+        throw new ValidationError(`Unknown tool: ${toolName}`);
+    }
+  } catch (error) {
+    Logger.error('Tool execution failed', error, {
+      toolName,
+      userId,
+    });
+    throw error;
+  }
+}
+
+/**
+ * Executes get_quests tool to retrieve quest information
+ * @param userId - The authenticated user's ID
+ * @param toolInput - The query parameters
+ * @returns Promise<string> - JSON string containing the requested quest data
+ * @throws ValidationError - If input validation fails
+ * @throws DatabaseError - If database operation fails
+ */
+async function executeGetQuests(
+  userId: string,
+  toolInput: ToolInput
+): Promise<string> {
+  const { questType, questId, epicId, dueDate, status } = toolInput;
+
+  Logger.info('Executing get_quests', {
+    userId,
+    questType,
+    questId,
+    epicId,
+    dueDate,
+    status,
+  });
+
+  try {
+    if (questType === 'epic') {
+      // Fetch goals/epic quests
+      const goals = await fetchActiveGoals(userId);
+
+      // Filter by specific questId if provided
+      if (questId) {
+        const goal = goals.find((g) => g.goalId === questId);
+        return JSON.stringify({
+          type: 'epic_quests',
+          data: goal ? [goal] : [],
+          count: goal ? 1 : 0,
+        });
+      }
+
+      // Filter by status if provided
+      let filteredGoals = goals;
+      if (status) {
+        filteredGoals = goals.filter((g) => g.status === status);
+      }
+
+      return JSON.stringify({
+        type: 'epic_quests',
+        data: filteredGoals,
+        count: filteredGoals.length,
+      });
+    } else if (questType === 'daily') {
+      // Fetch tasks/daily quests
+      let tasks;
+
+      if (dueDate) {
+        // If specific date provided, we'd need a new function to fetch by date
+        // For now, fetch today's tasks and filter
+        tasks = await fetchTodayTasks(userId);
+        tasks = tasks.filter((t) => t.dueDate === dueDate);
+      } else {
+        // Fetch today's tasks by default
+        tasks = await fetchTodayTasks(userId);
+      }
+
+      // Filter by specific questId if provided
+      if (questId) {
+        tasks = tasks.filter((t) => t.taskId === questId);
+      }
+
+      // Filter by epicId if provided
+      if (epicId) {
+        tasks = tasks.filter((t) => t.goalId === epicId);
+      }
+
+      // Filter by status if provided
+      if (status) {
+        tasks = tasks.filter((t) => t.status === status);
+      }
+
+      return JSON.stringify({
+        type: 'daily_quests',
+        data: tasks,
+        count: tasks.length,
+      });
+    } else {
+      throw new ValidationError(
+        `Unknown quest type for get_quests: ${questType}`
+      );
+    }
+  } catch (error) {
+    Logger.error('Failed to execute get_quests', error, {
+      userId,
+      questType,
+    });
+    throw error;
+  }
+}
+
+/**
+ * Executes modify_quest tool to create, update, or delete quests
+ * @param userId - The authenticated user's ID
+ * @param toolInput - The modification parameters
+ * @returns Promise<string> - Success confirmation message
+ * @throws ValidationError - If input validation fails
+ * @throws DatabaseError - If database operation fails
+ */
+async function executeModifyQuest(
+  userId: string,
+  toolInput: ToolInput
+): Promise<string> {
+  // Validate required fields for modify_quest
   if (!toolInput.operation || !toolInput.questType) {
     throw new ValidationError(
       'Tool input missing required fields: operation and questType'
     );
   }
 
-  Logger.info('Bedrock tool call received', {
-    tool: 'manage_quest',
+  Logger.info('Executing modify_quest', {
     operation: toolInput.operation,
     questType: toolInput.questType,
     userId,
@@ -66,7 +206,7 @@ export async function executeTool(
         throw new ValidationError(`Unknown operation: ${operation}`);
     }
   } catch (error) {
-    Logger.error('Tool execution failed', error, {
+    Logger.error('Failed to execute modify_quest', error, {
       operation,
       questType,
       userId,
@@ -87,7 +227,8 @@ async function createQuest(
   userId: string,
   toolInput: ToolInput
 ): Promise<string> {
-  const { questType, title, dueDate, epicId } = toolInput;
+  const { questType, title, dueDate, epicId, frequency, daysOfWeek } =
+    toolInput;
 
   if (questType === 'epic') {
     if (!title) {
@@ -99,6 +240,16 @@ async function createQuest(
       throw new ValidationError('Title is required for creating a daily quest');
     }
     return await createTask(userId, title, dueDate, epicId);
+  } else if (questType === 'recurrence') {
+    if (!title || !frequency) {
+      throw new ValidationError(
+        'Title and frequency are required for creating a recurrence rule'
+      );
+    }
+    return await createRecurrenceRule(userId, title, frequency, {
+      goalId: epicId,
+      daysOfWeek,
+    });
   }
 
   throw new ValidationError(`Unknown quest type: ${questType}`);
@@ -133,6 +284,8 @@ async function updateQuest(
     return await updateGoal(userId, questId, updateFields);
   } else if (questType === 'daily') {
     return await updateTask(userId, questId, updateFields);
+  } else if (questType === 'recurrence') {
+    return await updateRecurrenceRule(userId, questId, updateFields);
   }
 
   throw new ValidationError(`Unknown quest type: ${questType}`);
@@ -161,6 +314,8 @@ async function deleteQuest(
     return await deleteGoal(userId, questId);
   } else if (questType === 'daily') {
     return await deleteTask(userId, questId);
+  } else if (questType === 'recurrence') {
+    return await deleteRecurrenceRule(userId, questId);
   }
 
   throw new ValidationError(`Unknown quest type: ${questType}`);

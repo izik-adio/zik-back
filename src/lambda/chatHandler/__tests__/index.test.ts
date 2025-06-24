@@ -282,17 +282,21 @@ describe('ChatHandler Integration Tests', () => {
 </tool_use>
 
 I'll create that task for you right now.`,
-        toolCall: {
-          tool: 'manage_quest',
-          input: {
-            operation: 'create',
-            type: 'task',
-            title: 'Practice piano',
-            description: 'Practice piano for 30 minutes',
-            dueDate: '2025-06-24',
-            priority: 'medium',
+        toolCalls: [
+          {
+            tool: 'modify_quest',
+            input: {
+              operation: 'create',
+              questType: 'daily',
+              title: 'Practice piano',
+              dueDate: '2025-06-24',
+              updateFields: {
+                description: 'Practice piano for 30 minutes',
+                priority: 'medium',
+              },
+            },
           },
-        },
+        ],
       };
 
       const mockToolResult = {
@@ -319,13 +323,15 @@ I'll create that task for you right now.`,
       expect(mockInvokeBedrock).toHaveBeenCalledWith(
         'prompt for task creation'
       ); // Verify tool execution was called with parsed tool input
-      expect(mockExecuteTool).toHaveBeenCalledWith(mockUserId, {
+      expect(mockExecuteTool).toHaveBeenCalledWith(mockUserId, 'modify_quest', {
         operation: 'create',
-        type: 'task',
+        questType: 'daily',
         title: 'Practice piano',
-        description: 'Practice piano for 30 minutes',
+        updateFields: {
+          description: 'Practice piano for 30 minutes',
+          priority: 'medium',
+        },
         dueDate: '2025-06-24',
-        priority: 'medium',
       });
 
       // Verify messages were saved
@@ -368,16 +374,20 @@ I'll create that task for you right now.`,
 </tool_use>
 
 Let me set that up for you.`,
-        toolCall: {
-          tool: 'manage_quest',
-          input: {
-            operation: 'create',
-            type: 'goal',
-            title: 'Learn Spanish',
-            description: 'Become conversational in Spanish within a year',
-            category: 'education',
+        toolCalls: [
+          {
+            tool: 'modify_quest',
+            input: {
+              operation: 'create',
+              questType: 'epic',
+              title: 'Learn Spanish',
+              updateFields: {
+                description: 'Become conversational in Spanish within a year',
+                category: 'education',
+              },
+            },
           },
-        },
+        ],
       };
 
       const mockToolResult =
@@ -385,14 +395,15 @@ Let me set that up for you.`,
 
       mockInvokeBedrock.mockResolvedValue(mockBedrockResponse);
       mockExecuteTool.mockResolvedValue(mockToolResult);
-
       const result = await handler(event);
-      expect(mockExecuteTool).toHaveBeenCalledWith(mockUserId, {
+      expect(mockExecuteTool).toHaveBeenCalledWith(mockUserId, 'modify_quest', {
         operation: 'create',
-        type: 'goal',
+        questType: 'epic',
         title: 'Learn Spanish',
-        description: 'Become conversational in Spanish within a year',
-        category: 'education',
+        updateFields: {
+          description: 'Become conversational in Spanish within a year',
+          category: 'education',
+        },
       });
 
       expect(result.statusCode).toBe(200);
@@ -413,15 +424,17 @@ Let me set that up for you.`,
   "dueDate": "invalid-date"
 }
 </tool_use>`,
-        toolCall: {
-          tool: 'manage_quest',
-          input: {
-            operation: 'create',
-            type: 'task',
-            title: 'Invalid task',
-            dueDate: 'invalid-date',
+        toolCalls: [
+          {
+            tool: 'modify_quest',
+            input: {
+              operation: 'create',
+              questType: 'daily',
+              title: 'Invalid task',
+              dueDate: 'invalid-date',
+            },
           },
-        },
+        ],
       };
 
       // The toolExecutor will throw a ValidationError, which gets caught and handled in the handler
@@ -722,28 +735,36 @@ The tool block above is malformed.`,
 </tool_use>
 
 Both tasks will be created.`,
-        toolCall: {
-          tool: 'manage_quest',
-          input: {
-            operation: 'create',
-            type: 'task',
-            title: 'First task',
+        toolCalls: [
+          {
+            tool: 'modify_quest',
+            input: {
+              operation: 'create',
+              questType: 'daily',
+              title: 'First task',
+            },
           },
-        },
+          {
+            tool: 'modify_quest',
+            input: {
+              operation: 'create',
+              questType: 'daily',
+              title: 'Second task',
+            },
+          },
+        ],
       };
 
       const mockToolResult = 'First task created successfully';
 
       mockInvokeBedrock.mockResolvedValue(multipleToolResponse);
       mockExecuteTool.mockResolvedValue(mockToolResult);
-
       const result = await handler(event);
-
       // Should only execute the first tool
       expect(mockExecuteTool).toHaveBeenCalledTimes(1);
-      expect(mockExecuteTool).toHaveBeenCalledWith(mockUserId, {
+      expect(mockExecuteTool).toHaveBeenCalledWith(mockUserId, 'modify_quest', {
         operation: 'create',
-        type: 'task',
+        questType: 'daily',
         title: 'First task',
       });
 

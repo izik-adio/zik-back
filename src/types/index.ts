@@ -63,6 +63,23 @@ export interface ChatMessage {
 }
 
 /**
+ * Recurrence rule for automatically generating daily quests
+ */
+export interface RecurrenceRule {
+  userId: string;
+  recurrenceRuleId: string;
+  goalId?: string; // Optional linked goal ID
+  title: string;
+  description?: string;
+  priority?: 'low' | 'medium' | 'high';
+  status: 'active' | 'paused';
+  frequency: 'daily' | 'weekdays' | 'weekends' | 'weekly';
+  daysOfWeek?: number[]; // For 'weekly' frequency (0=Sun, 1=Mon, ..., 6=Sat)
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
  * Aggregated context data for AI prompt construction
  */
 export interface ContextData {
@@ -74,16 +91,25 @@ export interface ContextData {
 
 /**
  * Tool input parameters for AI quest management operations
+ * Updated to support both get_quests (read) and modify_quest (write) operations
  */
 export interface ToolInput {
-  operation: 'create' | 'update' | 'delete';
-  questType: 'epic' | 'daily';
-  title?: string;
+  // Common fields
+  questType?: 'epic' | 'daily' | 'recurrence';
   questId?: string;
   epicId?: string;
+
+  // Fields for modify_quest tool
+  operation?: 'create' | 'update' | 'delete';
+  title?: string;
   dueDate?: string;
   recurrenceRule?: string;
+  frequency?: 'daily' | 'weekdays' | 'weekends' | 'weekly';
+  daysOfWeek?: number[];
   updateFields?: { [key: string]: any };
+
+  // Fields for get_quests tool
+  status?: 'pending' | 'in-progress' | 'completed' | 'active' | 'paused';
 }
 
 /**
