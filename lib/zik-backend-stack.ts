@@ -188,6 +188,11 @@ export class ZikBackendStack extends cdk.Stack {
       handler: 'handler',
       environment: {
         GOALS_TABLE_NAME: goalsTable.tableName,
+        TASKS_TABLE_NAME: tasksTable.tableName,
+        CHAT_MESSAGES_TABLE_NAME: chatMessagesTable.tableName,
+        USERS_TABLE_NAME: usersTable.tableName,
+        RECURRENCE_RULES_TABLE_NAME: recurrenceRulesTable.tableName,
+        USER_ID_DUE_DATE_INDEX: tasksUserDueDateIndexName,
         USER_POOL_ID: userPool.userPoolId,
         USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
       },

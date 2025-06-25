@@ -11,7 +11,7 @@ import {
 import { randomUUID } from 'crypto';
 import { docClient } from './client';
 import { config } from '../../config';
-import { Goal } from '../../types';
+import { Goal } from '../../types/index';
 import {
   DatabaseError,
   NotFoundError,

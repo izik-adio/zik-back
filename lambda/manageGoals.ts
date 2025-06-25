@@ -5,16 +5,7 @@ import {
   createSuccessResponse,
   createErrorResponse,
 } from '../src/utils/responses';
-
-// Logger class from recovered code (until we fix the export)
-const Logger = {
-  info: (message: string, metadata?: any) =>
-    console.log(JSON.stringify({ level: 'INFO', message, ...metadata })),
-  warn: (message: string, metadata?: any) =>
-    console.log(JSON.stringify({ level: 'WARN', message, ...metadata })),
-  error: (message: string, metadata?: any) =>
-    console.log(JSON.stringify({ level: 'ERROR', message, ...metadata })),
-};
+import { Logger } from '../src/utils/logger';
 
 /**
  * Lambda handler for Goals Management
