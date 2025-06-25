@@ -47,70 +47,11 @@ This system enables users to set up recurring habits once (like "Daily meditatio
 
 All endpoints require authentication via Bearer token in the Authorization header unless otherwise specified.
 
-### 4.1. AI Interaction
-
-#### `POST /chat`
-
-**Description:** The primary endpoint for all conversational interactions with the Zik AI assistant. This endpoint handles everything from simple greetings and questions to complex commands for creating, updating, and managing quests. The AI automatically determines whether to provide information or execute actions based on user intent.
-
-**Method:** `POST`
-
-**Headers:**
-
-```
-Authorization: Bearer <JWT_TOKEN>
-Content-Type: application/json
-```
-
-**Request Body (JSON):**
-
-```json
-{
-  "message": "Create a new epic quest to learn piano by the end of the year"
-}
-```
-
-**Success Response (200 OK):**
-
-```json
-{
-  "response": "✅ Epic Quest created! 'Learn Piano' is now active in your quest log.",
-  "timestamp": "2025-06-24T10:30:00.000Z",
-  "requestId": "req-12345"
-}
-```
-
-**AI Capabilities:**
-
-- **Query Intent:** Answers questions about existing quests, provides summaries, shows progress
-- **Action Intent:** Creates, updates, or deletes quests based on natural language commands
-- **Context Awareness:** Remembers conversation history and current user context
-
-**Example Interactions:**
-
-```
-User: "What quests do I have today?"
-AI: "You have 3 Daily Quests for today: Complete morning workout, Review project proposal, and Call mom."
-
-User: "Mark the workout as complete"
-AI: "✅ Daily Quest completed! 'Complete morning workout' is now marked as done."
-
-User: "Create a daily quest to read for 30 minutes tomorrow"
-AI: "✅ Daily Quest created! 'Read for 30 minutes' has been added for tomorrow."
-```
-
-**Error Responses:**
-
-- `400 Bad Request`: Invalid request format or missing message
-- `401 Unauthorized`: Missing or invalid JWT token
-- `413 Payload Too Large`: Message exceeds maximum length (5000 characters)
-- `500 Internal Server Error`: AI service or database error
-
-### 4.2. Quest Management
+### 4.1. Epic Quest Management (Goals)
 
 #### `GET /goals`
 
-**Description:** Retrieves all active Epic Quests (goals) for the authenticated user. This endpoint provides a focused view of the user's long-term objectives and aspirations.
+**Description:** Retrieves all active Epic Quests (goals) for the authenticated user.
 
 **Method:** `GET`
 
@@ -135,84 +76,46 @@ Authorization: Bearer <JWT_TOKEN>
       "targetDate": "2025-12-31",
       "createdAt": "2025-06-24T10:00:00.000Z",
       "updatedAt": "2025-06-24T10:00:00.000Z"
-    },
-    {
-      "goalId": "epic_def456",
-      "userId": "user-456",
-      "goalName": "Complete Marathon Training",
-      "status": "active",
-      "description": "Train for and complete a full marathon",
-      "category": "fitness",
-      "targetDate": "2025-10-15",
-      "createdAt": "2025-06-20T08:30:00.000Z",
-      "updatedAt": "2025-06-22T15:45:00.000Z"
     }
   ],
-  "count": 2,
+  "count": 1,
   "timestamp": "2025-06-24T10:30:00.000Z"
 }
 ```
 
-**Error Responses:**
+#### `POST /goals`
 
-- `401 Unauthorized`: Invalid or missing JWT token
-- `500 Internal Server Error`: Database or server error
+**Description:** Creates a new Epic Quest (goal) for the authenticated user.
 
----
-
-#### `GET /quests`
-
-**Description:** Retrieves all quests for the authenticated user, filtered by date for Daily Quests. This endpoint provides a complete view of the user's quest ecosystem.
-
-**Method:** `GET`
+**Method:** `POST`
 
 **Headers:**
 
 ```
 Authorization: Bearer <JWT_TOKEN>
+Content-Type: application/json
 ```
 
-**Query Parameters:**
+**Request Body (JSON):**
 
-- `date` (optional): Date in YYYY-MM-DD format. If provided, filters Daily Quests to the specified date. If omitted, returns today's Daily Quests.
+```json
+{
+  "title": "Learn Piano"
+}
+```
 
 **Success Response (200 OK):**
 
 ```json
 {
-  "epicQuests": [
-    {
-      "questId": "epic_abc123",
-      "userId": "user-456",
-      "title": "Learn Piano",
-      "status": "active",
-      "description": "Master basic piano techniques and songs",
-      "category": "personal-development",
-      "targetDate": "2025-12-31",
-      "createdAt": "2025-06-24T10:00:00.000Z",
-      "updatedAt": "2025-06-24T10:00:00.000Z"
-    }
-  ],
-  "dailyQuests": [
-    {
-      "questId": "daily_xyz789",
-      "userId": "user-456",
-      "epicId": "epic_abc123",
-      "title": "Practice piano scales",
-      "status": "pending",
-      "dueDate": "2025-06-24",
-      "priority": "medium",
-      "description": "Practice C major and G major scales",
-      "createdAt": "2025-06-24T10:00:00.000Z",
-      "updatedAt": "2025-06-24T10:00:00.000Z"
-    }
-  ]
+  "message": "✅ Epic Quest created: 'Learn Piano'! 🎯",
+  "timestamp": "2025-06-24T10:30:00.000Z"
 }
 ```
 
-#### `PUT /quests/{questId}`
+#### `PUT /goals/{goalId}`
 
-**Description:** Updates a specific quest's properties, commonly used for marking quests as complete or modifying quest details.
+**Description:** Updates a specific Epic Quest (goal) for the authenticated user.
 
 **Method:** `PUT`
 
@@ -225,29 +128,30 @@ Content-Type: application/json
 
 **Path Parameters:**
 
-- `questId` (required): The unique identifier of the quest to update
-
-**Query Parameters:**
-
-- `type` (required): Either "goal" for Epic Quests or "task" for Daily Quests
+- `goalId` (required): The unique identifier of the goal to update
 
 **Request Body (JSON):**
 
 ```json
 {
-  "status": "completed",
-  "title": "Updated quest title",
+  "goalName": "Updated Goal Name",
   "description": "Updated description",
-  "priority": "high"
+  "status": "completed"
 }
 ```
 
 **Success Response (200 OK):**
-Returns the updated quest object with the same structure as shown in the GET response above.
 
-#### `DELETE /quests/{questId}`
+```json
+{
+  "message": "✅ Quest updated: 'Updated Goal Name'! 🔄",
+  "timestamp": "2025-06-24T10:30:00.000Z"
+}
+```
 
-**Description:** Permanently deletes a specific quest from the user's quest log.
+#### `DELETE /goals/{goalId}`
+
+**Description:** Deletes a specific Epic Quest (goal) for the authenticated user.
 
 **Method:** `DELETE`
 
@@ -259,25 +163,63 @@ Authorization: Bearer <JWT_TOKEN>
 
 **Path Parameters:**
 
-- `questId` (required): The unique identifier of the quest to delete
-
-**Query Parameters:**
-
-- `type` (required): Either "goal" for Epic Quests or "task" for Daily Quests
+- `goalId` (required): The unique identifier of the goal to delete
 
 **Success Response (200 OK):**
 
 ```json
 {
-  "message": "Quest deleted successfully",
-  "questId": "epic_abc123",
+  "message": "✅ Quest deleted: 'Learn Piano'! 🗑️",
   "timestamp": "2025-06-24T10:30:00.000Z"
 }
 ```
 
-#### `POST /quests`
+---
 
-**Description:** Creates a new quest (Epic Quest or Daily Quest) with specified parameters.
+### 4.2. Daily Task Management
+
+#### `GET /tasks`
+
+**Description:** Retrieves all Daily Tasks for the authenticated user, filtered by date (default: today).
+
+**Method:** `GET`
+
+**Headers:**
+
+```
+Authorization: Bearer <JWT_TOKEN>
+```
+
+**Query Parameters:**
+
+- `date` (optional): Date in YYYY-MM-DD format. If provided, filters Daily Tasks to the specified date. If omitted, returns today's Daily Tasks.
+
+**Success Response (200 OK):**
+
+```json
+{
+  "tasks": [
+    {
+      "taskId": "daily_xyz789",
+      "userId": "user-456",
+      "epicId": "epic_abc123",
+      "taskName": "Practice piano scales",
+      "status": "pending",
+      "dueDate": "2025-06-24",
+      "priority": "medium",
+      "description": "Practice C major and G major scales",
+      "createdAt": "2025-06-24T10:00:00.000Z",
+      "updatedAt": "2025-06-24T10:00:00.000Z"
+    }
+  ],
+  "count": 1,
+  "timestamp": "2025-06-24T10:30:00.000Z"
+}
+```
+
+#### `POST /tasks`
+
+**Description:** Creates a new Daily Task for the authenticated user.
 
 **Method:** `POST`
 
@@ -293,17 +235,91 @@ Content-Type: application/json
 ```json
 {
   "title": "Complete project documentation",
-  "type": "task",
   "dueDate": "2025-06-30",
   "description": "Write comprehensive API documentation",
   "priority": "high",
-  "category": "work",
   "epicId": "epic_abc123"
 }
 ```
 
-**Success Response (201 Created):**
-Returns the created quest object with generated IDs and timestamps.
+**Success Response (200 OK):**
+
+```json
+{
+  "message": "✅ Daily Task created: 'Complete project documentation'! 📅",
+  "timestamp": "2025-06-24T10:30:00.000Z"
+}
+```
+
+#### `PUT /tasks/{taskId}`
+
+**Description:** Updates a specific Daily Task for the authenticated user.
+
+**Method:** `PUT`
+
+**Headers:**
+
+```
+Authorization: Bearer <JWT_TOKEN>
+Content-Type: application/json
+```
+
+**Path Parameters:**
+
+- `taskId` (required): The unique identifier of the task to update
+
+**Request Body (JSON):**
+
+```json
+{
+  "taskName": "Updated Task Name",
+  "description": "Updated description",
+  "status": "completed"
+}
+```
+
+**Success Response (200 OK):**
+
+```json
+{
+  "message": "✅ Task updated: 'Updated Task Name'! 🔄",
+  "timestamp": "2025-06-24T10:30:00.000Z"
+}
+```
+
+#### `DELETE /tasks/{taskId}`
+
+**Description:** Deletes a specific Daily Task for the authenticated user.
+
+**Method:** `DELETE`
+
+**Headers:**
+
+```
+Authorization: Bearer <JWT_TOKEN>
+```
+
+**Path Parameters:**
+
+- `taskId` (required): The unique identifier of the task to delete
+
+**Success Response (200 OK):**
+
+```json
+{
+  "message": "✅ Task deleted: 'Practice piano scales'! 🗑️",
+  "timestamp": "2025-06-24T10:30:00.000Z"
+}
+```
+
+---
+
+| Endpoint | Resource | Methods Supported      | Notes                       |
+| -------- | -------- | ---------------------- | --------------------------- |
+| `/goals` | Goals    | GET, POST, PUT, DELETE | Only for authenticated user |
+| `/tasks` | Tasks    | GET, POST, PUT, DELETE | Only for authenticated user |
+
+---
 
 ## 5. Core Data Structures
 

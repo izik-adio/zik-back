@@ -215,44 +215,44 @@ export class ZikBackendStack extends cdk.Stack {
 
     // --- Simplified API Gateway Routes ---
 
-    // Quest Management Routes (Protected with Cognito JWT Authorizer)
+    // Task Management Routes (Protected with Cognito JWT Authorizer)
     httpApi.addRoutes({
-      path: '/quests',
+      path: '/tasks',
       methods: [apigatewayv2.HttpMethod.POST],
       integration: new HttpLambdaIntegration(
-        'CreateQuestIntegration',
+        'CreateTaskIntegration',
         manageQuestsHandler
       ),
       authorizer: cognitoAuthorizer,
     });
 
     httpApi.addRoutes({
-      path: '/quests',
+      path: '/tasks',
       methods: [apigatewayv2.HttpMethod.GET],
       integration: new HttpLambdaIntegration(
-        'GetQuestsIntegration',
+        'GetTasksIntegration',
         manageQuestsHandler
       ),
       authorizer: cognitoAuthorizer,
     });
 
-    // DELETE route for quest deletion
+    // DELETE route for task deletion
     httpApi.addRoutes({
-      path: '/quests/{questId}',
+      path: '/tasks/{taskId}',
       methods: [apigatewayv2.HttpMethod.DELETE],
       integration: new HttpLambdaIntegration(
-        'DeleteQuestIntegration',
+        'DeleteTaskIntegration',
         manageQuestsHandler
       ),
       authorizer: cognitoAuthorizer,
     });
 
-    // PUT route for quest updates
+    // PUT route for task updates
     httpApi.addRoutes({
-      path: '/quests/{questId}',
+      path: '/tasks/{taskId}',
       methods: [apigatewayv2.HttpMethod.PUT],
       integration: new HttpLambdaIntegration(
-        'UpdateQuestIntegration',
+        'UpdateTaskIntegration',
         manageQuestsHandler
       ),
       authorizer: cognitoAuthorizer,

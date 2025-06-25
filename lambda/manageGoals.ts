@@ -1,6 +1,11 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { verifyTokenAndGetUserId } from '../src/services/authService';
-import { fetchActiveGoals } from '../src/services/database/goals';
+import {
+  fetchActiveGoals,
+  createGoal,
+  updateGoal,
+  deleteGoal,
+} from '../src/services/database/goals';
 import {
   createSuccessResponse,
   createErrorResponse,
@@ -9,7 +14,7 @@ import { Logger } from '../src/utils/logger';
 
 /**
  * Lambda handler for Goals Management
- * Handles GET /goals endpoint for retrieving Epic Quests
+ * Handles CRUD for Epic Quests (Goals) at /goals
  */
 export const handler = async (
   event: APIGatewayProxyEvent
@@ -41,10 +46,23 @@ export const handler = async (
 
     Logger.info('User authenticated', { userId, requestId });
 
-    // Handle HTTP methods
+    // Route by HTTP method and path
+    const goalId = event.pathParameters?.goalId;
     switch (event.httpMethod) {
       case 'GET':
         return await handleGetGoals(userId, requestId);
+      case 'POST':
+        return await handleCreateGoal(event, userId, requestId);
+      case 'PUT':
+        if (!goalId) {
+          return createErrorResponse(400, 'Missing goalId in path', requestId);
+        }
+        return await handleUpdateGoal(event, userId, goalId, requestId);
+      case 'DELETE':
+        if (!goalId) {
+          return createErrorResponse(400, 'Missing goalId in path', requestId);
+        }
+        return await handleDeleteGoal(userId, goalId, requestId);
       default:
         Logger.warn('Method not allowed', {
           method: event.httpMethod,
@@ -70,20 +88,16 @@ async function handleGetGoals(
 ): Promise<APIGatewayProxyResult> {
   try {
     Logger.info('Fetching goals for user', { userId, requestId });
-
     const goals = await fetchActiveGoals(userId);
-
     const response = {
       goals: goals,
       count: goals.length,
     };
-
     Logger.info('Goals retrieved successfully', {
       userId,
       goalCount: goals.length,
       requestId,
     });
-
     return createSuccessResponse(response);
   } catch (error) {
     Logger.error('Failed to fetch goals', {
@@ -92,5 +106,83 @@ async function handleGetGoals(
       requestId,
     });
     return createErrorResponse(500, 'Failed to retrieve goals', requestId);
+  }
+}
+
+/**
+ * Handle POST /goals - Create a new Epic Quest (goal)
+ */
+async function handleCreateGoal(
+  event: APIGatewayProxyEvent,
+  userId: string,
+  requestId: string
+): Promise<APIGatewayProxyResult> {
+  try {
+    const body = event.body ? JSON.parse(event.body) : {};
+    const { title } = body;
+    if (!title) {
+      return createErrorResponse(400, 'Title is required', requestId);
+    }
+    const result = await createGoal(userId, title);
+    Logger.info('Goal created successfully', { userId, title, requestId });
+    return createSuccessResponse({ message: result }, requestId);
+  } catch (error) {
+    Logger.error('Failed to create goal', {
+      userId,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      requestId,
+    });
+    return createErrorResponse(500, 'Failed to create goal', requestId);
+  }
+}
+
+/**
+ * Handle PUT /goals/{goalId} - Update an Epic Quest (goal)
+ */
+async function handleUpdateGoal(
+  event: APIGatewayProxyEvent,
+  userId: string,
+  goalId: string,
+  requestId: string
+): Promise<APIGatewayProxyResult> {
+  try {
+    const body = event.body ? JSON.parse(event.body) : {};
+    if (Object.keys(body).length === 0) {
+      return createErrorResponse(400, 'No update fields provided', requestId);
+    }
+    const result = await updateGoal(userId, goalId, body);
+    Logger.info('Goal updated successfully', { userId, goalId, requestId });
+    return createSuccessResponse({ message: result }, requestId);
+  } catch (error) {
+    Logger.error('Failed to update goal', {
+      userId,
+      goalId,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      requestId,
+    });
+    return createErrorResponse(500, 'Failed to update goal', requestId);
+  }
+}
+
+/**
+ * Handle DELETE /goals/{goalId} - Delete an Epic Quest (goal)
+ */
+async function handleDeleteGoal(
+  userId: string,
+  goalId: string,
+  requestId: string
+): Promise<APIGatewayProxyResult> {
+  try {
+    const result = await deleteGoal(userId, goalId);
+    Logger.info('Goal deleted successfully', { userId, goalId, requestId });
+    return createSuccessResponse({ message: result }, requestId);
+  } catch (error) {
+    Logger.error('Failed to delete goal', {
+      userId,
+      goalId,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      requestId,
+    });
+    return createErrorResponse(500, 'Failed to delete goal', requestId);
   }
 }
