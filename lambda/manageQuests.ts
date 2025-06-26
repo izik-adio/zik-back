@@ -1,4 +1,4 @@
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { verifyTokenAndGetUserId } from '../src/services/authService';
 import {
   fetchTodayTasks,
@@ -17,13 +17,17 @@ import { Logger } from '../src/utils/logger';
  * Handles CRUD for Daily Tasks at /tasks
  */
 export const handler = async (
-  event: APIGatewayProxyEvent
-): Promise<APIGatewayProxyResult> => {
+  event: APIGatewayProxyEventV2
+): Promise<APIGatewayProxyResultV2> => {
   const requestId = event.requestContext.requestId;
   Logger.info('Tasks handler invoked', {
-    method: event.httpMethod,
-    path: event.path,
+    method: event.requestContext?.http?.method,
+    path: event.requestContext?.http?.path,
+    pathParameters: event.pathParameters,
+    queryStringParameters: event.queryStringParameters,
+    headers: event.headers,
     requestId,
+    eventRaw: JSON.stringify(event),
   });
   try {
     // Extract and verify JWT token
@@ -48,7 +52,8 @@ export const handler = async (
 
     // Route by HTTP method and path
     const taskId = event.pathParameters?.taskId;
-    switch (event.httpMethod) {
+    const httpMethod = event.requestContext?.http?.method;
+    switch (httpMethod) {
       case 'GET':
         return await handleGetTasks(event, userId, requestId);
       case 'POST':
@@ -65,7 +70,7 @@ export const handler = async (
         return await handleDeleteTask(userId, taskId, requestId);
       default:
         Logger.warn('Method not allowed', {
-          method: event.httpMethod,
+          method: httpMethod,
           requestId,
         });
         return createErrorResponse(405, 'Method not allowed', requestId);
@@ -83,10 +88,10 @@ export const handler = async (
  * Handle GET /tasks - Retrieve today's tasks or by date for the user
  */
 async function handleGetTasks(
-  event: APIGatewayProxyEvent,
+  event: APIGatewayProxyEventV2,
   userId: string,
   requestId: string
-): Promise<APIGatewayProxyResult> {
+): Promise<APIGatewayProxyResultV2> {
   try {
     // Support ?date=YYYY-MM-DD, default to today
     const date =
@@ -125,10 +130,10 @@ async function handleGetTasks(
  * Handle POST /tasks - Create a new Daily Task
  */
 async function handleCreateTask(
-  event: APIGatewayProxyEvent,
+  event: APIGatewayProxyEventV2,
   userId: string,
   requestId: string
-): Promise<APIGatewayProxyResult> {
+): Promise<APIGatewayProxyResultV2> {
   try {
     const body = event.body ? JSON.parse(event.body) : {};
     const { title, dueDate, epicId } = body;
@@ -157,11 +162,11 @@ async function handleCreateTask(
  * Handle PUT /tasks/{taskId} - Update a Daily Task
  */
 async function handleUpdateTask(
-  event: APIGatewayProxyEvent,
+  event: APIGatewayProxyEventV2,
   userId: string,
   taskId: string,
   requestId: string
-): Promise<APIGatewayProxyResult> {
+): Promise<APIGatewayProxyResultV2> {
   try {
     const body = event.body ? JSON.parse(event.body) : {};
     if (Object.keys(body).length === 0) {
@@ -188,7 +193,7 @@ async function handleDeleteTask(
   userId: string,
   taskId: string,
   requestId: string
-): Promise<APIGatewayProxyResult> {
+): Promise<APIGatewayProxyResultV2> {
   try {
     const result = await deleteTask(userId, taskId);
     Logger.info('Task deleted successfully', { userId, taskId, requestId });

@@ -166,6 +166,8 @@ export class ZikBackendStack extends cdk.Stack {
           GOALS_TABLE_NAME: goalsTable.tableName,
           TASKS_TABLE_NAME: tasksTable.tableName,
           CHAT_MESSAGES_TABLE_NAME: chatMessagesTable.tableName,
+          USERS_TABLE_NAME: usersTable.tableName,
+          RECURRENCE_RULES_TABLE_NAME: recurrenceRulesTable.tableName,
           USER_ID_DUE_DATE_INDEX: tasksUserDueDateIndexName,
           USER_POOL_ID: userPool.userPoolId,
           USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
@@ -199,7 +201,7 @@ export class ZikBackendStack extends cdk.Stack {
     });
 
     // Grant permissions to the goals handler Lambda
-    goalsTable.grantReadData(manageGoalsHandler);
+    goalsTable.grantReadWriteData(manageGoalsHandler);
 
     // Grant Cognito permissions for token verification
     userPool.grant(manageGoalsHandler, 'cognito-idp:GetUser');
@@ -264,6 +266,36 @@ export class ZikBackendStack extends cdk.Stack {
       methods: [apigatewayv2.HttpMethod.GET],
       integration: new HttpLambdaIntegration(
         'GetGoalsIntegration',
+        manageGoalsHandler
+      ),
+      authorizer: cognitoAuthorizer,
+    });
+    // Add POST /goals
+    httpApi.addRoutes({
+      path: '/goals',
+      methods: [apigatewayv2.HttpMethod.POST],
+      integration: new HttpLambdaIntegration(
+        'CreateGoalIntegration',
+        manageGoalsHandler
+      ),
+      authorizer: cognitoAuthorizer,
+    });
+    // Add PUT /goals/{goalId}
+    httpApi.addRoutes({
+      path: '/goals/{goalId}',
+      methods: [apigatewayv2.HttpMethod.PUT],
+      integration: new HttpLambdaIntegration(
+        'UpdateGoalIntegration',
+        manageGoalsHandler
+      ),
+      authorizer: cognitoAuthorizer,
+    });
+    // Add DELETE /goals/{goalId}
+    httpApi.addRoutes({
+      path: '/goals/{goalId}',
+      methods: [apigatewayv2.HttpMethod.DELETE],
+      integration: new HttpLambdaIntegration(
+        'DeleteGoalIntegration',
         manageGoalsHandler
       ),
       authorizer: cognitoAuthorizer,

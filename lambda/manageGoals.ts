@@ -1,4 +1,4 @@
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { verifyTokenAndGetUserId } from '../src/services/authService';
 import {
   fetchActiveGoals,
@@ -17,13 +17,17 @@ import { Logger } from '../src/utils/logger';
  * Handles CRUD for Epic Quests (Goals) at /goals
  */
 export const handler = async (
-  event: APIGatewayProxyEvent
-): Promise<APIGatewayProxyResult> => {
+  event: APIGatewayProxyEventV2
+): Promise<APIGatewayProxyResultV2> => {
   const requestId = event.requestContext.requestId;
   Logger.info('Goals handler invoked', {
-    method: event.httpMethod,
-    path: event.path,
+    method: event.requestContext?.http?.method,
+    path: event.requestContext?.http?.path,
+    pathParameters: event.pathParameters,
+    queryStringParameters: event.queryStringParameters,
+    headers: event.headers,
     requestId,
+    eventRaw: JSON.stringify(event),
   });
   try {
     // Extract and verify JWT token
@@ -48,7 +52,8 @@ export const handler = async (
 
     // Route by HTTP method and path
     const goalId = event.pathParameters?.goalId;
-    switch (event.httpMethod) {
+    const httpMethod = event.requestContext?.http?.method;
+    switch (httpMethod) {
       case 'GET':
         return await handleGetGoals(userId, requestId);
       case 'POST':
@@ -65,7 +70,7 @@ export const handler = async (
         return await handleDeleteGoal(userId, goalId, requestId);
       default:
         Logger.warn('Method not allowed', {
-          method: event.httpMethod,
+          method: httpMethod,
           requestId,
         });
         return createErrorResponse(405, 'Method not allowed', requestId);
@@ -85,7 +90,7 @@ export const handler = async (
 async function handleGetGoals(
   userId: string,
   requestId: string
-): Promise<APIGatewayProxyResult> {
+): Promise<APIGatewayProxyResultV2> {
   try {
     Logger.info('Fetching goals for user', { userId, requestId });
     const goals = await fetchActiveGoals(userId);
@@ -113,18 +118,18 @@ async function handleGetGoals(
  * Handle POST /goals - Create a new Epic Quest (goal)
  */
 async function handleCreateGoal(
-  event: APIGatewayProxyEvent,
+  event: APIGatewayProxyEventV2,
   userId: string,
   requestId: string
-): Promise<APIGatewayProxyResult> {
+): Promise<APIGatewayProxyResultV2> {
   try {
     const body = event.body ? JSON.parse(event.body) : {};
-    const { title } = body;
-    if (!title) {
-      return createErrorResponse(400, 'Title is required', requestId);
+    const { goalName } = body;
+    if (!goalName) {
+      return createErrorResponse(400, 'goalName is required', requestId);
     }
-    const result = await createGoal(userId, title);
-    Logger.info('Goal created successfully', { userId, title, requestId });
+    const result = await createGoal(userId, goalName);
+    Logger.info('Goal created successfully', { userId, goalName, requestId });
     return createSuccessResponse({ message: result }, requestId);
   } catch (error) {
     Logger.error('Failed to create goal', {
@@ -140,11 +145,11 @@ async function handleCreateGoal(
  * Handle PUT /goals/{goalId} - Update an Epic Quest (goal)
  */
 async function handleUpdateGoal(
-  event: APIGatewayProxyEvent,
+  event: APIGatewayProxyEventV2,
   userId: string,
   goalId: string,
   requestId: string
-): Promise<APIGatewayProxyResult> {
+): Promise<APIGatewayProxyResultV2> {
   try {
     const body = event.body ? JSON.parse(event.body) : {};
     if (Object.keys(body).length === 0) {
@@ -171,7 +176,7 @@ async function handleDeleteGoal(
   userId: string,
   goalId: string,
   requestId: string
-): Promise<APIGatewayProxyResult> {
+): Promise<APIGatewayProxyResultV2> {
   try {
     const result = await deleteGoal(userId, goalId);
     Logger.info('Goal deleted successfully', { userId, goalId, requestId });

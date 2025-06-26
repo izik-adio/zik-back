@@ -169,58 +169,79 @@ export async function handler(
             continue; // Skip to the next tool call
           }
 
-          // GUARDRAIL 2: Validate required fields are present
-          if (!call.input.operation || !call.input.questType) {
-            Logger.warn(
-              'AI attempted tool call with missing required fields. Blocking tool call.',
-              {
-                requestId,
-                userId,
-                operation: call.input.operation,
-                questType: call.input.questType,
-                toolCall: JSON.stringify(call),
-              }
-            );
-            continue; // Skip invalid tool calls
+          // GUARDRAIL 2: Validate required fields are present (tool-specific)
+          if (call.tool === 'modify_quest') {
+            // modify_quest requires both operation and questType
+            if (!call.input.operation || !call.input.questType) {
+              Logger.warn(
+                'AI attempted modify_quest tool call with missing required fields. Blocking tool call.',
+                {
+                  requestId,
+                  userId,
+                  operation: call.input.operation,
+                  questType: call.input.questType,
+                  toolCall: JSON.stringify(call),
+                }
+              );
+              continue; // Skip invalid tool calls
+            }
+          } else if (call.tool === 'get_quests') {
+            // get_quests requires questType but not operation
+            if (!call.input.questType) {
+              Logger.warn(
+                'AI attempted get_quests tool call with missing questType. Blocking tool call.',
+                {
+                  requestId,
+                  userId,
+                  questType: call.input.questType,
+                  toolCall: JSON.stringify(call),
+                }
+              );
+              continue; // Skip invalid tool calls
+            }
           }
 
-          // GUARDRAIL 3: Validate operation is one of the allowed values
-          const allowedOperations: Array<ToolInput['operation']> = [
-            'create',
-            'update',
-            'delete',
-          ];
-          if (!allowedOperations.includes(call.input.operation)) {
-            Logger.warn(
-              'AI attempted tool call with invalid operation. Blocking tool call.',
-              {
-                requestId,
-                userId,
-                attemptedOperation: call.input.operation,
-                allowedOperations,
-                toolCall: JSON.stringify(call),
-              }
-            );
-            continue; // Skip invalid operations
+          // GUARDRAIL 3: Validate operation is one of the allowed values (only for modify_quest)
+          if (call.tool === 'modify_quest') {
+            const allowedOperations: Array<ToolInput['operation']> = [
+              'create',
+              'update',
+              'delete',
+            ];
+            if (!allowedOperations.includes(call.input.operation)) {
+              Logger.warn(
+                'AI attempted tool call with invalid operation. Blocking tool call.',
+                {
+                  requestId,
+                  userId,
+                  attemptedOperation: call.input.operation,
+                  allowedOperations,
+                  toolCall: JSON.stringify(call),
+                }
+              );
+              continue; // Skip invalid operations
+            }
           }
 
           // GUARDRAIL 4: Validate questType is one of the allowed values
-          const allowedQuestTypes: Array<ToolInput['questType']> = [
-            'epic',
-            'daily',
-          ];
-          if (!allowedQuestTypes.includes(call.input.questType)) {
-            Logger.warn(
-              'AI attempted tool call with invalid questType. Blocking tool call.',
-              {
-                requestId,
-                userId,
-                attemptedQuestType: call.input.questType,
-                allowedQuestTypes,
-                toolCall: JSON.stringify(call),
-              }
-            );
-            continue; // Skip invalid quest types
+          if (call.input.questType) {
+            const allowedQuestTypes: Array<ToolInput['questType']> = [
+              'epic',
+              'daily',
+            ];
+            if (!allowedQuestTypes.includes(call.input.questType)) {
+              Logger.warn(
+                'AI attempted tool call with invalid questType. Blocking tool call.',
+                {
+                  requestId,
+                  userId,
+                  attemptedQuestType: call.input.questType,
+                  allowedQuestTypes,
+                  toolCall: JSON.stringify(call),
+                }
+              );
+              continue; // Skip invalid quest types
+            }
           } // GUARDRAIL 5: Validate tool name
           if (call.tool !== 'get_quests' && call.tool !== 'modify_quest') {
             Logger.warn(

@@ -1,597 +1,437 @@
-# Zik API Documentation
+# Zik Backend Documentation (2025)
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Architecture](#architecture)
+3. [API Reference](#api-reference)
+4. [Data Models](#data-models)
+5. [Core Services](#core-services)
+6. [Infrastructure & Deployment](#infrastructure--deployment)
+7. [Environment & Configuration](#environment--configuration)
+8. [Testing](#testing)
+9. [Utilities](#utilities)
+10. [Development & Contribution](#development--contribution)
+
+---
 
 ## 1. Overview
 
-The Zik API is a serverless backend infrastructure built on AWS, designed to power the Zik AI life companion mobile application. The API provides intelligent quest management capabilities through conversational AI interactions, allowing users to create, manage, and track their Epic Quests (long-term goals) and Daily Quests (tasks) through natural language conversations with an AI assistant powered by Amazon Bedrock's Claude 3 Haiku model.
-
-## 2. Environment Setup (.env)
-
-Your Expo frontend project requires the following environment variables in your `.env` file:
-
-```env
-# API Configuration
-API_ENDPOINT=https://dxc20i9fqg.execute-api.us-east-1.amazonaws.com/
-
-# Cognito Configuration
-USER_POOL_ID=us-east-1_GFWJSDxFp
-USER_POOL_CLIENT_ID=49mk8jp1brkcuj4bv9fi4fn3mu
-
-```
-
-## 3. Proactive Engine (Event-Driven Architecture)
-
-The Proactive Engine is the heart of Zik's automated assistance. It ensures that users' recurring habits and tasks are consistently added to their daily plans without manual intervention.
-
-### Architecture Components
-
-- **Trigger:** An **Amazon EventBridge Rule** is configured to fire daily at 05:00 UTC
-- **Compute:** The rule triggers a dedicated **AWS Lambda function** (`recurringTaskGenerator`)
-- **Logic:** This function scans the `RecurrenceRules` database, identifies all active rules for the day, and automatically creates new `Task` items for each relevant user
-- **Reliability:** This fire-and-forget system is highly reliable and scalable, forming the foundation of Zik's proactive nature
-
-### How It Works
-
-1. **Daily Trigger**: EventBridge rule fires at 5:00 AM UTC every day
-2. **Rule Processing**: Lambda function fetches all active recurrence rules
-3. **Day Calculation**: For each rule, determines if a task should be created today based on:
-   - `daily`: Creates task every day
-   - `weekdays`: Creates task Monday-Friday
-   - `weekends`: Creates task Saturday-Sunday
-   - `weekly`: Creates task on specified days of the week
-4. **Task Creation**: Automatically creates new daily tasks using the existing task creation service
-5. **Logging**: Comprehensive logging for monitoring and debugging
-
-This system enables users to set up recurring habits once (like "Daily meditation" or "Workout on weekdays") and have them automatically appear in their daily task list without any manual intervention.
-
-## 4. API Endpoints
-
-All endpoints require authentication via Bearer token in the Authorization header unless otherwise specified.
-
-### 4.1. Epic Quest Management (Goals)
-
-#### `GET /goals`
-
-**Description:** Retrieves all active Epic Quests (goals) for the authenticated user.
-
-**Method:** `GET`
-
-**Headers:**
-
-```
-Authorization: Bearer <JWT_TOKEN>
-```
-
-**Success Response (200 OK):**
-
-```json
-{
-  "goals": [
-    {
-      "goalId": "epic_abc123",
-      "userId": "user-456",
-      "goalName": "Learn Piano",
-      "status": "active",
-      "description": "Master basic piano techniques and songs",
-      "category": "personal-development",
-      "targetDate": "2025-12-31",
-      "createdAt": "2025-06-24T10:00:00.000Z",
-      "updatedAt": "2025-06-24T10:00:00.000Z"
-    }
-  ],
-  "count": 1,
-  "timestamp": "2025-06-24T10:30:00.000Z"
-}
-```
-
-#### `POST /goals`
-
-**Description:** Creates a new Epic Quest (goal) for the authenticated user.
-
-**Method:** `POST`
-
-**Headers:**
-
-```
-Authorization: Bearer <JWT_TOKEN>
-Content-Type: application/json
-```
-
-**Request Body (JSON):**
-
-```json
-{
-  "title": "Learn Piano"
-}
-```
-
-**Success Response (200 OK):**
-
-```json
-{
-  "message": "✅ Epic Quest created: 'Learn Piano'! 🎯",
-  "timestamp": "2025-06-24T10:30:00.000Z"
-}
-```
-
-#### `PUT /goals/{goalId}`
-
-**Description:** Updates a specific Epic Quest (goal) for the authenticated user.
-
-**Method:** `PUT`
-
-**Headers:**
-
-```
-Authorization: Bearer <JWT_TOKEN>
-Content-Type: application/json
-```
-
-**Path Parameters:**
-
-- `goalId` (required): The unique identifier of the goal to update
-
-**Request Body (JSON):**
-
-```json
-{
-  "goalName": "Updated Goal Name",
-  "description": "Updated description",
-  "status": "completed"
-}
-```
-
-**Success Response (200 OK):**
-
-```json
-{
-  "message": "✅ Quest updated: 'Updated Goal Name'! 🔄",
-  "timestamp": "2025-06-24T10:30:00.000Z"
-}
-```
-
-#### `DELETE /goals/{goalId}`
-
-**Description:** Deletes a specific Epic Quest (goal) for the authenticated user.
-
-**Method:** `DELETE`
-
-**Headers:**
-
-```
-Authorization: Bearer <JWT_TOKEN>
-```
-
-**Path Parameters:**
-
-- `goalId` (required): The unique identifier of the goal to delete
-
-**Success Response (200 OK):**
-
-```json
-{
-  "message": "✅ Quest deleted: 'Learn Piano'! 🗑️",
-  "timestamp": "2025-06-24T10:30:00.000Z"
-}
-```
+The Zik backend is a modern, serverless, event-driven system built on AWS. It powers the Zik AI life companion app, enabling users to manage long-term goals (Epic Quests), daily tasks, and recurring habits through conversational AI and automation. The backend is designed for scalability, maintainability, and testability, using a clean architecture and AWS best practices.
 
 ---
 
-### 4.2. Daily Task Management
-
-#### `GET /tasks`
-
-**Description:** Retrieves all Daily Tasks for the authenticated user, filtered by date (default: today).
-
-**Method:** `GET`
-
-**Headers:**
+## 2. Architecture
 
 ```
-Authorization: Bearer <JWT_TOKEN>
+zik-back/
+├── src/                          # Main source code (clean architecture)
+│   ├── lambda/                   # Modern Lambda orchestrators
+│   │   ├── chatHandler/          # Conversational AI entrypoint
+│   │   │   ├── index.ts
+│   │   │   └── __tests__/
+│   │   │       └── index.test.ts
+│   │   └── recurringTaskGenerator/
+│   │       └── index.ts
+│   ├── services/                 # Core business and infrastructure services
+│   │   ├── auth/                 # (Reserved for future: modular auth logic)
+│   │   ├── authService.ts        # JWT validation and user identity
+│   │   ├── bedrockService.ts     # Amazon Bedrock AI integration
+│   │   ├── toolExecutor.ts       # AI tool execution coordination
+│   │   └── database/             # DynamoDB access modules (context aggregation in chatMessages.ts)
+│   │       ├── client.ts
+│   │       ├── goals.ts
+│   │       ├── tasks.ts
+│   │       ├── chatMessages.ts
+│   │       ├── recurrenceRules.ts
+│   │       └── __tests__/
+│   ├── utils/                    # Logging, error, and response helpers
+│   ├── types/                    # Shared TypeScript interfaces
+│   └── config.ts                 # Centralized environment config
+├── lambda/                       # Legacy Lambda handlers (for migration/testing)
+├── lib/                          # AWS CDK infrastructure code
+├── bin/                          # CDK app entry point
+├── test/                         # Integration and E2E tests
+├── dist/                         # TypeScript build output
+├── cdk.out/                      # CDK build artifacts
+├── auth-test.js, chat-test.js, token-utils.js, token.json, token.txt # Developer/test utilities (not core)
+├── package.json, tsconfig.json, jest.config.js, cdk.json, etc.
 ```
 
-**Query Parameters:**
-
-- `date` (optional): Date in YYYY-MM-DD format. If provided, filters Daily Tasks to the specified date. If omitted, returns today's Daily Tasks.
-
-**Success Response (200 OK):**
-
-```json
-{
-  "tasks": [
-    {
-      "taskId": "daily_xyz789",
-      "userId": "user-456",
-      "epicId": "epic_abc123",
-      "taskName": "Practice piano scales",
-      "status": "pending",
-      "dueDate": "2025-06-24",
-      "priority": "medium",
-      "description": "Practice C major and G major scales",
-      "createdAt": "2025-06-24T10:00:00.000Z",
-      "updatedAt": "2025-06-24T10:00:00.000Z"
-    }
-  ],
-  "count": 1,
-  "timestamp": "2025-06-24T10:30:00.000Z"
-}
-```
-
-#### `POST /tasks`
-
-**Description:** Creates a new Daily Task for the authenticated user.
-
-**Method:** `POST`
-
-**Headers:**
-
-```
-Authorization: Bearer <JWT_TOKEN>
-Content-Type: application/json
-```
-
-**Request Body (JSON):**
-
-```json
-{
-  "title": "Complete project documentation",
-  "dueDate": "2025-06-30",
-  "description": "Write comprehensive API documentation",
-  "priority": "high",
-  "epicId": "epic_abc123"
-}
-```
-
-**Success Response (200 OK):**
-
-```json
-{
-  "message": "✅ Daily Task created: 'Complete project documentation'! 📅",
-  "timestamp": "2025-06-24T10:30:00.000Z"
-}
-```
-
-#### `PUT /tasks/{taskId}`
-
-**Description:** Updates a specific Daily Task for the authenticated user.
-
-**Method:** `PUT`
-
-**Headers:**
-
-```
-Authorization: Bearer <JWT_TOKEN>
-Content-Type: application/json
-```
-
-**Path Parameters:**
-
-- `taskId` (required): The unique identifier of the task to update
-
-**Request Body (JSON):**
-
-```json
-{
-  "taskName": "Updated Task Name",
-  "description": "Updated description",
-  "status": "completed"
-}
-```
-
-**Success Response (200 OK):**
-
-```json
-{
-  "message": "✅ Task updated: 'Updated Task Name'! 🔄",
-  "timestamp": "2025-06-24T10:30:00.000Z"
-}
-```
-
-#### `DELETE /tasks/{taskId}`
-
-**Description:** Deletes a specific Daily Task for the authenticated user.
-
-**Method:** `DELETE`
-
-**Headers:**
-
-```
-Authorization: Bearer <JWT_TOKEN>
-```
-
-**Path Parameters:**
-
-- `taskId` (required): The unique identifier of the task to delete
-
-**Success Response (200 OK):**
-
-```json
-{
-  "message": "✅ Task deleted: 'Practice piano scales'! 🗑️",
-  "timestamp": "2025-06-24T10:30:00.000Z"
-}
-```
+- **src/lambda/**: Modern Lambda orchestrators (chat, recurring tasks)
+- **src/services/**: Business logic, database, AI, and tool execution
+- **src/types/**: Shared data models and contracts
+- **src/utils/**: Logging, error, and response helpers
+- **lambda/**: Legacy Lambda handlers (for migration/testing)
+- **lib/**, **bin/**: AWS CDK infrastructure-as-code
+- **test/**: Integration and E2E tests
+- **auth-test.js**, **chat-test.js**, **token-utils.js**: Developer/test utilities (not part of production system)
 
 ---
 
-| Endpoint | Resource | Methods Supported      | Notes                       |
-| -------- | -------- | ---------------------- | --------------------------- |
-| `/goals` | Goals    | GET, POST, PUT, DELETE | Only for authenticated user |
-| `/tasks` | Tasks    | GET, POST, PUT, DELETE | Only for authenticated user |
+## 3. API Reference
 
----
+### Authentication
 
-## 5. Core Data Structures
-
-### Goal Object (Epic Quests)
-
-Goals represent long-term aspirations and objectives in the user's life.
-
-```typescript
-type Goal = {
-  userId: string; // User's unique identifier
-  goalId: string; // Unique identifier (e.g., 'goal_abc123')
-  goalName: string; // Goal name/title
-  status: 'active' | 'completed' | 'paused'; // Current status
-  description?: string; // Optional detailed description
-  category?: string; // Optional category (e.g., 'health', 'career')
-  targetDate?: string; // Optional target completion date (YYYY-MM-DD)
-  createdAt: string; // ISO 8601 timestamp of creation
-  updatedAt: string; // ISO 8601 timestamp of last update
-};
-```
-
-### Task Object (Daily Quests)
-
-Tasks represent specific actions and daily activities users complete to progress toward their goals.
-
-```typescript
-type Task = {
-  userId: string; // User's unique identifier
-  taskId: string; // Unique identifier (e.g., 'task_xyz789')
-  taskName: string; // Task name/title
-  status: 'pending' | 'in-progress' | 'completed'; // Current status
-  dueDate: string; // Due date in YYYY-MM-DD format
-  priority: 'low' | 'medium' | 'high'; // Task priority level
-  description?: string; // Optional detailed description
-  goalId?: string; // ID of the linked Goal (optional)
-  createdAt: string; // ISO 8601 timestamp of creation
-  updatedAt: string; // ISO 8601 timestamp of last update
-};
-```
-
-### RecurrenceRule Object
-
-Recurrence Rules define templates for automatically generating daily tasks on a recurring schedule.
-
-```typescript
-type RecurrenceRule = {
-  userId: string; // User's unique identifier
-  recurrenceRuleId: string; // Unique identifier (e.g., 'rule_abc123')
-  goalId?: string; // ID of the linked Goal (optional)
-  title: string; // Base title for the recurring task
-  description?: string; // Optional detailed description
-  priority?: 'low' | 'medium' | 'high'; // Priority for the created tasks
-  status: 'active' | 'paused'; // Only 'active' rules are processed
-  frequency: 'daily' | 'weekdays' | 'weekends' | 'weekly';
-  daysOfWeek?: number[]; // For 'weekly' frequency (0=Sun, 1=Mon, ..., 6=Sat)
-  createdAt: string; // ISO 8601 timestamp of creation
-  updatedAt: string; // ISO 8601 timestamp of last update
-};
-```
-
-### Chat Response Object
-
-```typescript
-type ChatResponse = {
-  response: string; // AI-generated response text
-  timestamp: string; // ISO 8601 timestamp of response
-  requestId: string; // Unique request identifier for debugging
-};
-```
-
-## 6. Authentication
-
-All API endpoints are protected and require valid authentication. The API uses AWS Cognito for user authentication and JWT tokens for session management.
-
-### Authentication Flow
-
-1. **User Authentication:** Users authenticate through your app's authentication provider (AWS Cognito)
-2. **Token Acquisition:** Upon successful authentication, obtain a JWT access token
-3. **API Requests:** Include the JWT token in the Authorization header for all API calls
-
-### Authorization Header Format
+All endpoints require a valid JWT access token (AWS Cognito) in the `Authorization` header. All operations are strictly scoped to the authenticated user (no cross-user access).
 
 ```
 Authorization: Bearer <JWT_ACCESS_TOKEN>
 ```
 
-### Token Validation
+### 3.1. Chat API (Conversational AI)
 
-- The backend validates all tokens against the AWS Cognito User Pool
-- Tokens are checked for signature validity, expiration, and required claims
-- Each request extracts the user ID from the token's `sub` claim for user isolation
+- **POST /chat**
+  - Conversational endpoint for interacting with Zik AI.
+  - Request body: `{ "message": "<user message>" }`
+  - Returns: `{ response: <AI response>, requestId, timestamp }`
+  - Handles context gathering, AI prompt, tool execution, and chat history.
 
-## 7. Error Handling
+### 3.2. Epic Quest (Goal) Management
 
-The API uses standard HTTP status codes and provides detailed error messages to help with debugging and user experience.
+- **GET /goals**: List all active goals for the authenticated user.
+- **POST /goals**: Create a new goal. `{ "goalName": "..." }`
+- **PUT /goals/{goalId}**: Update a goal. `{ ...fields }`
+- **DELETE /goals/{goalId}**: Delete a goal.
 
-### Common HTTP Status Codes
+### 3.3. Daily Task Management
 
-#### `200 OK`
+- **GET /tasks**: List today's tasks (or by date) for the user. Supports optional `date` query param (e.g., `/tasks?date=YYYY-MM-DD`).
+- **POST /tasks**: Create a new task. `{ "taskName": "...", "dueDate": "YYYY-MM-DD", ... }`
+- **PUT /tasks/{taskId}**: Update a task. `{ ...fields }`
+- **DELETE /tasks/{taskId}**: Delete a task.
 
-Request successful. Response body contains requested data.
+> **Sample request/response payloads for all endpoints are available in `API-REFRACTORING-NOTES.md`.**
 
-#### `201 Created`
+### 3.4. Recurrence Rules (Proactive Engine)
 
-Resource created successfully. Response body contains the created resource.
-
-#### `400 Bad Request`
-
-Request is malformed or contains invalid data.
-
-```json
-{
-  "error": "Missing or invalid message field",
-  "timestamp": "2025-06-24T10:30:00.000Z",
-  "requestId": "req-12345"
-}
-```
-
-#### `401 Unauthorized`
-
-JWT token is missing, invalid, or expired. User should be redirected to login.
-
-```json
-{
-  "error": "Invalid or expired token",
-  "timestamp": "2025-06-24T10:30:00.000Z"
-}
-```
-
-#### `403 Forbidden`
-
-User is authenticated but not authorized to perform the requested action.
-
-#### `404 Not Found`
-
-Requested resource (e.g., specific quest) does not exist or user doesn't have access.
-
-```json
-{
-  "error": "Quest not found or access denied",
-  "timestamp": "2025-06-24T10:30:00.000Z"
-}
-```
-
-#### `413 Payload Too Large`
-
-Request body exceeds maximum size limits (e.g., message too long).
-
-#### `429 Too Many Requests`
-
-Rate limit exceeded. Client should implement exponential backoff.
-
-#### `500 Internal Server Error`
-
-Generic server error. Display user-friendly message and optionally retry.
-
-```json
-{
-  "error": "Something went wrong, please try again",
-  "timestamp": "2025-06-24T10:30:00.000Z",
-  "requestId": "req-12345"
-}
-```
-
-### Error Handling Best Practices
-
-1. **Token Expiration:** Monitor for 401 responses and implement automatic token refresh
-2. **Network Errors:** Implement retry logic with exponential backoff for network failures
-3. **User Experience:** Convert technical error messages into user-friendly notifications
-4. **Logging:** Log error details (including requestId) for debugging support requests
-
-## 8. Rate Limiting and Performance
-
-### Rate Limits
-
-- Chat endpoint: 10 requests per minute per user
-- Quest management endpoints: 30 requests per minute per user
-
-### Performance Considerations
-
-- **Caching:** Consider caching quest data locally and syncing periodically
-- **Optimistic Updates:** Update UI immediately for quest status changes, with rollback on failure
-- **Pagination:** Large quest lists may be paginated in future versions
-
-### Response Times
-
-- Chat endpoint: 2-5 seconds (AI processing time)
-- Quest management: <500ms (database operations)
-
-## 9. Development and Testing
-
-### API Base URLs
-
-- **Production:** `https://your-api-id.execute-api.us-east-1.amazonaws.com/prod`
-- **Development:** Contact your backend team for development environment URLs
-
-### Testing Recommendations
-
-1. **Unit Tests:** Test all API integration functions with mock responses
-2. **Integration Tests:** Test complete user flows including authentication
-3. **Error Scenarios:** Test all error conditions and edge cases
-4. **Performance Tests:** Test with realistic data volumes and network conditions
-
-### Debug Information
-
-- All responses include `requestId` for debugging support requests
-- Check CloudWatch logs using the `requestId` for detailed error investigation
-- Monitor console for detailed error objects during development
-
-## 9. Testing the Proactive Engine
-
-This section provides instructions for testing the new recurring task generator.
-
-### Step A: Deploy the Infrastructure
-
-1. From your project's root directory, run the CDK deployment command:
-   ```bash
-   cdk deploy
-   ```
-2. Wait for the deployment to complete. This will create the new `RecurrenceRulesTable`, the `RecurringTaskGenerator` Lambda, and the EventBridge rule.
-
-### Step B: Create a Test Recurrence Rule
-
-1. Navigate to the **AWS Management Console** and go to the **DynamoDB** service.
-2. In the left-hand menu, click on **Tables**.
-3. Select the **`ZikBackendStack-RecurrenceRulesTable...`** table.
-4. Click the **"Explore table items"** button.
-5. Click the **"Create item"** button.
-6. Switch to the **JSON** view and paste the following sample rule. **Replace `YOUR_USER_ID` with an actual `userId` from your Cognito user pool.**
-   ```json
-   {
-     "userId": "YOUR_USER_ID",
-     "recurrenceRuleId": "rule_test_01",
-     "title": "Daily Morning Meditation",
-     "description": "Meditate for 10 minutes to start the day.",
-     "frequency": "daily",
-     "priority": "high",
-     "status": "active",
-     "createdAt": "2025-01-01T00:00:00.000Z",
-     "updatedAt": "2025-01-01T00:00:00.000Z"
-   }
-   ```
-7. Click **"Create item"**.
-
-### Step C: Manually Test the Lambda Function
-
-1. Navigate to the **AWS Lambda** service in the console.
-2. In the list of functions, find and click on the **`ZikBackendStack-RecurringTaskGenerator...`** function.
-3. Select the **"Test"** tab.
-4. You can leave the default "hello-world" event template as is, since our function doesn't use the event payload.
-5. Click the **"Invoke"** button.
-6. The execution should succeed. Check the **"Function logs"** at the bottom of the page. You should see logs like:
-   - `Starting recurring task generation job...`
-   - `Found 1 active recurrence rules to process.`
-   - `Created recurring task for user...`
-   - `Job completed. Successfully created 1 new daily quests.`
-
-### Step D: Verify the Result
-
-1. Navigate back to the **DynamoDB** service.
-2. Select the **`ZikBackendStack-TasksTable...`** table.
-3. Click **"Explore table items"**.
-4. You should now see a new item in the table for `YOUR_USER_ID` with the title "Daily Morning Meditation" and today's date as the `dueDate`.
-
-### Step E: Monitor the EventBridge Rule
-
-1. Navigate to the **Amazon EventBridge** service in the console.
-2. Click on **"Rules"** in the left sidebar.
-3. You should see a rule named **`ZikBackendStack-DailyRecurringTaskRule...`**.
-4. Click on the rule to see its configuration and execution history.
-5. The rule will automatically trigger daily at 5:00 AM UTC.
+- Managed internally; not exposed as public API. Used by scheduled Lambda to generate daily tasks.
 
 ---
 
-This completes the implementation of the proactive engine. The Zik backend is now a fully functional, hybrid system capable of both handling direct user commands via its API and proactively assisting users through scheduled, event-driven automation.
+## 4. Data Models
+
+All types are defined in `src/types/index.ts`.
+
+- **Note:**
+  - The `Task` model uses `taskName` (not `title`), and `Goal` uses `goalName`.
+  - The `RecurrenceRule` model supports `daysOfWeek` for weekly rules.
+  - The `ToolInput` interface (for AI tool calls) is also defined in `src/types/index.ts`.
+
+### UserProfile
+
+```ts
+interface UserProfile {
+  userId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  preferences: any;
+  createdAt: string;
+  lastLoginAt?: string;
+}
+```
+
+### Goal (Epic Quest)
+
+```ts
+interface Goal {
+  userId: string;
+  goalId: string;
+  goalName: string;
+  description?: string;
+  targetDate?: string;
+  category?: string;
+  status: 'active' | 'completed' | 'paused';
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+### Task (Daily Quest)
+
+```ts
+interface Task {
+  userId: string;
+  taskId: string;
+  taskName: string;
+  description?: string;
+  dueDate: string;
+  priority: 'low' | 'medium' | 'high';
+  status: 'pending' | 'in-progress' | 'completed';
+  goalId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+### RecurrenceRule
+
+```ts
+interface RecurrenceRule {
+  userId: string;
+  recurrenceRuleId: string;
+  goalId?: string;
+  title: string;
+  description?: string;
+  priority?: 'low' | 'medium' | 'high';
+  status: 'active' | 'paused';
+  frequency: 'daily' | 'weekdays' | 'weekends' | 'weekly';
+  daysOfWeek?: number[];
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+### ChatMessage
+
+```ts
+interface ChatMessage {
+  userId: string;
+  timestamp: string;
+  messageId: string;
+  role: 'user' | 'assistant';
+  content: string;
+}
+```
+
+### ContextData (for AI)
+
+```ts
+interface ContextData {
+  userProfile: UserProfile | null;
+  activeGoals: Goal[];
+  todayTasks: Task[];
+  chatHistory: ChatMessage[];
+}
+```
+
+---
+
+## 4a. Database Schema Details
+
+The Zik backend uses DynamoDB for all persistent storage. Below are the details of each table, including partition/sort keys and indexes, as defined in the infrastructure code (`lib/zik-backend-stack.ts`).
+
+### Goals Table
+
+- **Table Name:** `GOALS_TABLE_NAME`
+- **Partition Key:** `userId` (string)
+- **Sort Key:** `goalId` (string)
+- **Billing Mode:** PAY_PER_REQUEST
+- **Description:** Stores all Epic Quests (long-term goals) for each user. Each goal is uniquely identified by the combination of `userId` and `goalId`.
+
+### Tasks Table
+
+- **Table Name:** `TASKS_TABLE_NAME`
+- **Partition Key:** `userId` (string)
+- **Sort Key:** `taskId` (string)
+- **Billing Mode:** PAY_PER_REQUEST
+- **Description:** Stores all Daily Quests (tasks) for each user. Each task is uniquely identified by the combination of `userId` and `taskId`.
+- **Global Secondary Index:**
+  - **Index Name:** `userId-dueDate-index`
+  - **Partition Key:** `userId` (string)
+  - **Sort Key:** `dueDate` (string)
+  - **Purpose:** Enables efficient queries for all tasks for a user on a specific date.
+
+### Users Table
+
+- **Table Name:** `USERS_TABLE_NAME`
+- **Partition Key:** `userId` (string)
+- **Billing Mode:** PAY_PER_REQUEST
+- **Description:** Stores user profile information. Each user is uniquely identified by `userId`.
+
+### Recurrence Rules Table
+
+- **Table Name:** `RECURRENCE_RULES_TABLE_NAME`
+- **Partition Key:** `userId` (string)
+- **Sort Key:** `recurrenceRuleId` (string)
+- **Billing Mode:** PAY_PER_REQUEST
+- **Description:** Stores recurrence rules for automatically generating daily tasks. Each rule is uniquely identified by the combination of `userId` and `recurrenceRuleId`.
+
+### Chat Messages Table
+
+- **Table Name:** `CHAT_MESSAGES_TABLE_NAME`
+- **Partition Key:** `userId` (string)
+- **Sort Key:** `timestamp` (string, ISO8601)
+- **Billing Mode:** PAY_PER_REQUEST
+- **Description:** Stores all chat messages for each user, ordered by timestamp.
+
+---
+
+**Attribute Types:**
+
+- All partition and sort keys are strings.
+- All tables use on-demand (PAY_PER_REQUEST) billing for scalability.
+
+**Relationships:**
+
+- All tables are user-scoped: every item is partitioned by `userId`.
+- Tasks and goals are linked by `goalId` (optional on Task).
+- Recurrence rules can reference a `goalId` (optional).
+
+**Indexes:**
+
+- The only explicit GSI is on the Tasks table for querying by `dueDate`.
+
+For more details, see the infrastructure code in `lib/zik-backend-stack.ts`.
+
+---
+
+## 4b. AI Capabilities and Tooling
+
+The Zik backend leverages Amazon Bedrock (Claude 3 Haiku) to provide an intelligent, conversational AI life coach. The AI is guided by a system prompt and can call specific tools to interact with user data. Below are the details of the AI's capabilities and the tools it can use:
+
+### System Prompt and Philosophy
+
+- The AI acts as an empathetic, encouraging, and intelligent life coach.
+- It helps users define, manage, and achieve goals by breaking them into "Epic Quests" (long-term goals) and "Daily Quests" (tasks).
+- The AI is instructed to:
+  - Use tools to answer user questions or perform actions (never guess or invent data)
+  - Celebrate user achievements and encourage progress
+  - Keep responses concise and mobile-friendly
+  - Never mention tools or its AI nature in responses
+
+### Available Tools
+
+#### 1. `get_quests` (Read Tool)
+
+- **Purpose:** Retrieve a user's quests (either epic/goals or daily/tasks)
+- **When Used:**
+  - User asks about their goals, tasks, or progress (e.g., "What are my goals?", "Do I have tasks today?")
+- **Parameters:**
+  - `questType` (required): `'epic'` (for goals) or `'daily'` (for tasks)
+  - `questId` (optional): Filter by specific quest ID
+  - `epicId` (optional): Filter daily quests by parent goal
+  - `dueDate` (optional): Filter daily quests by date (YYYY-MM-DD)
+  - `status` (optional): Filter by quest status (`pending`, `in-progress`, `completed`, `active`, `paused`)
+
+#### 2. `modify_quest` (Write Tool)
+
+- **Purpose:** Create, update, or delete a user's quest (goal or task)
+- **When Used:**
+  - User asks to add, change, remove, complete, or schedule a quest
+- **Parameters:**
+  - `operation` (required): `'create'`, `'update'`, or `'delete'`
+  - `questType` (required): `'epic'`, `'daily'`, or `'recurrence'`
+  - `title` (required for create): Title of the quest
+  - `questId` (required for update/delete): ID of the quest
+  - `epicId` (optional): Parent goal for a daily quest
+  - `dueDate` (optional): Date for a daily quest
+  - `recurrenceRule` (optional): Recurrence pattern (e.g., 'daily', 'weekdays')
+  - `frequency`, `daysOfWeek` (optional): For recurrence rules
+  - `updateFields` (required for update): Fields to update (object)
+
+### Tool Usage Logic
+
+- The AI always calls the appropriate tool before responding to the user.
+- For read requests, it uses `get_quests` with the right filters.
+- For create/update/delete, it uses `modify_quest` with the correct parameters.
+- The AI never fabricates data—if it doesn't know, it uses a tool or says so.
+
+### Example Tool Call (AI Internal)
+
+```json
+{
+  "tool": "get_quests",
+  "input": {
+    "questType": "daily",
+    "dueDate": "2025-06-26"
+  }
+}
+```
+
+### Example User-Facing Response
+
+> "You have 3 tasks scheduled for today. Let me know if you want to add or update any!"
+
+---
+
+For more, see the system prompt and tool definitions in `src/services/bedrockService.ts` and the tool execution logic in `src/services/toolExecutor.ts`.
+
+---
+
+## 5. Core Services
+
+### 5.1. Authentication (`src/services/authService.ts`)
+
+- Validates JWT tokens using AWS Cognito.
+- Extracts userId from the token's `sub` claim.
+- Throws `AuthError` or `ValidationError` on failure.
+
+### 5.2. Bedrock AI Service (`src/services/bedrockService.ts`)
+
+- Integrates with Amazon Bedrock (Claude 3 Haiku).
+- Builds prompts from user context and message.
+- Supports AI tool calls: `get_quests` (read), `modify_quest` (write).
+- Handles tool call parameter validation and error handling.
+
+### 5.3. Tool Executor (`src/services/toolExecutor.ts`)
+
+- Executes AI tool calls for quest management.
+- Supports both read and write operations for all quest types (goals, tasks, recurrence rules).
+- Implements guardrails to prevent invalid or unsafe tool calls.
+
+### 5.4. Database Services (`src/services/database/`)
+
+- **client.ts**: Centralized DynamoDB DocumentClient.
+- **goals.ts**: CRUD for goals.
+- **tasks.ts**: CRUD for tasks.
+- **chatMessages.ts**: Chat history, user profile, and context aggregation (`getContextForUser` fetches all user context in parallel).
+- **recurrenceRules.ts**: CRUD for recurrence rules.
+
+---
+
+## 6. Infrastructure & Deployment
+
+- **AWS CDK** (`lib/zik-backend-stack.ts`, `bin/zik-backend.ts`):
+  - Defines all infrastructure as code (API Gateway, Cognito, DynamoDB, Lambda, EventBridge, IAM, etc.)
+  - Deploy with `cdk deploy`.
+- **API Gateway**: HTTP API for all endpoints.
+- **Cognito**: User authentication and JWT issuance.
+- **DynamoDB**: Tables for users, goals, tasks, chat messages, recurrence rules.
+- **Lambda**: All business logic and orchestration.
+- **EventBridge**: Schedules recurring task generation.
+
+---
+
+## 7. Environment & Configuration
+
+- All environment variables are managed in `.env` and validated in `src/config.ts` on startup.
+- Required variables:
+  - `API_ENDPOINT`, `USER_POOL_ID`, `USER_POOL_CLIENT_ID`, `AWS_REGION`, `bedrockModelId`, etc.
+  - DynamoDB table names: `CHAT_MESSAGES_TABLE_NAME`, `GOALS_TABLE_NAME`, `TASKS_TABLE_NAME`, `USERS_TABLE_NAME`, `RECURRENCE_RULES_TABLE_NAME`
+  - Indexes: `USER_ID_DUE_DATE_INDEX`
+- See `.env` and `.env.test` for examples.
+
+---
+
+## 8. Testing
+
+- **Unit Tests**: Located in `src/services/**/__tests__` and `src/utils/__tests__`.
+- **Integration Tests**: `src/lambda/chatHandler/__tests__/index.test.ts`, etc.
+- **E2E Tests**: In `test/` directory.
+- **Test Runner**: Jest (`jest.config.js`).
+- **Coverage**: Run `npm run test:coverage`.
+- **All API responses include a `requestId` for debugging.**
+
+---
+
+## 9. Utilities
+
+- **Logger** (`src/utils/logger.ts`): Structured, safe logging with metadata (JSON format for easy CloudWatch querying).
+- **Error Classes** (`src/utils/errors.ts`): Custom error types for validation, auth, database, Bedrock, not found. All error types map to appropriate HTTP status codes and user-friendly messages.
+- **Response Helpers** (`src/utils/responses.ts`): Standardized API Gateway responses with CORS and error formatting.
+
+---
+
+## 10. Development & Contribution
+
+- **Build**: `npm run build` (TypeScript)
+- **Watch**: `npm run watch`
+- **Test**: `npm test` (all), `npm run test:unit`, `npm run test:integration`, etc.
+- **Deploy**: `cdk deploy`
+- **Environment**: Node.js 18+, AWS credentials, `.env` file
+- **Code Style**: Prettier (`.prettierrc`)
+- **Extensibility**: Add new Lambda handlers in `src/lambda/`, new services in `src/services/`, new types in `src/types/`
+- **Type Safety**: All shared types/interfaces are centralized in `src/types/index.ts` for consistency across the application.
+- **Developer Utilities**: Test scripts and token helpers are in the project root.
