@@ -1,0 +1,1 @@
+{"statusCode":401,"headers":{"Content-Type":"application/json","Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"Content-Type,X-Amz-Date,Authorization,X-Api-Key","Access-Control-Allow-Methods":"POST,OPTIONS"},"body":"{\"error\":\"Invalid or expired token\",\"timestamp\":\"2025-06-26T19:16:12.567Z\",\"requestId\":\"ce177ca5-41b1-4720-aad0-cb5b4d88882a\"}"}

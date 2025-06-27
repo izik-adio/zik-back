@@ -14,20 +14,29 @@ zik-back/
 │   │   │   ├── index.ts           # Main chat handler orchestrator
 │   │   │   └── __tests__/
 │   │   │       └── index.test.ts  # Integration tests
-│   │   └── recurringTaskGenerator/
-│   │       └── index.ts           # Scheduled recurring task generator
+│   │   ├── recurringTaskGenerator/
+│   │   │   └── index.ts           # Scheduled recurring task generator
+│   │   ├── roadmapGenerator/     # AI-powered roadmap generation
+│   │   │   └── index.ts
+│   │   ├── milestoneSaver/       # Milestone persistence
+│   │   │   └── index.ts
+│   │   └── dailyQuestGenerator/  # Just-in-time task creation
+│   │       └── index.ts
 │   │
 │   ├── services/                 # Core business and infrastructure services
-│   │   ├── auth/
+│   │   ├── auth/                 # (Reserved for future: modular auth logic)
 │   │   │   ├── authService.ts     # JWT validation and user identity
 │   │   │   └── __tests__/
 │   │   │       └── authService.test.ts
 │   │   ├── bedrockService.ts      # AI service interactions (Bedrock)
 │   │   ├── toolExecutor.ts        # Tool execution coordination
+│   │   ├── roadmapService.ts     # Planner & Coach AI logic
+│   │   ├── stepFunctionService.ts # Step Function orchestration
 │   │   └── database/              # DynamoDB access modules
 │   │       ├── client.ts          # Centralized DynamoDB client
 │   │       ├── goals.ts           # Goals CRUD operations
 │   │       ├── tasks.ts           # Tasks CRUD operations
+│   │       ├── milestones.ts     # Milestone operations
 │   │       ├── chatMessages.ts    # Chat persistence/context
 │   │       ├── recurrenceRules.ts # Recurring quest rules
 │   │       └── __tests__/         # Database service tests

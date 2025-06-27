@@ -3,11 +3,12 @@
  */
 export const config = {
   // DynamoDB Table Names
-  chatMessagesTableName: process.env.CHAT_MESSAGES_TABLE_NAME!,
-  goalsTableName: process.env.GOALS_TABLE_NAME!,
-  tasksTableName: process.env.TASKS_TABLE_NAME!,
-  usersTableName: process.env.USERS_TABLE_NAME!,
-  recurrenceRulesTableName: process.env.RECURRENCE_RULES_TABLE_NAME!,
+  chatMessagesTableName: process.env.CHAT_MESSAGES_TABLE_NAME || '',
+  goalsTableName: process.env.GOALS_TABLE_NAME || '',
+  tasksTableName: process.env.TASKS_TABLE_NAME || '',
+  usersTableName: process.env.USERS_TABLE_NAME || '',
+  recurrenceRulesTableName: process.env.RECURRENCE_RULES_TABLE_NAME || '',
+  milestonesTableName: process.env.MILESTONES_TABLE_NAME || '',
 
   // DynamoDB Indexes
   userIdDueDateIndex: process.env.USER_ID_DUE_DATE_INDEX!,
@@ -28,6 +29,10 @@ export const config = {
   maxTitleLength: 200,
   defaultChatHistoryLimit: 10,
 
+  // Step Functions & Lambda ARNs (optional for some Lambda functions)
+  roadmapGeneratorWorkflowArn: process.env.ROADMAP_GENERATOR_WORKFLOW_ARN || '',
+  dailyQuestGeneratorLambdaArn: process.env.DAILY_QUEST_GENERATOR_LAMBDA_ARN || '',
+
   // JWT Configuration
   accessTokenExpiry: '1d',
   refreshTokenExpiry: '7d',
@@ -36,11 +41,6 @@ export const config = {
 
 // Validate required environment variables on module load
 const requiredEnvVars = [
-  'CHAT_MESSAGES_TABLE_NAME',
-  'GOALS_TABLE_NAME',
-  'TASKS_TABLE_NAME',
-  'USERS_TABLE_NAME',
-  'RECURRENCE_RULES_TABLE_NAME',
   'USER_ID_DUE_DATE_INDEX',
   'USER_POOL_ID',
   'USER_POOL_CLIENT_ID',

@@ -31,6 +31,23 @@ export interface Goal {
   targetDate?: string;
   category?: string;
   status: 'active' | 'completed' | 'paused';
+  roadmapStatus: 'none' | 'generating' | 'ready'; // New field for roadmap status
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Milestone data structure - represents high-level steps in an Epic Quest's roadmap
+ */
+export interface Milestone {
+  epicId: string; // The goalId of the parent Epic Quest (Partition Key)
+  sequence: number; // Order in the roadmap (Sort Key)
+  milestoneId: string; // Unique ID for the milestone
+  userId: string; // The ID of the user who owns it
+  title: string; // e.g., "Week 1: Master Basic Chords"
+  description?: string; // e.g., "Focus on G, C, and D chords and smooth transitions"
+  status: 'locked' | 'active' | 'completed'; // Progress tracking
+  durationInDays: number; // Estimated duration for this milestone
   createdAt: string;
   updatedAt: string;
 }
@@ -47,6 +64,7 @@ export interface Task {
   priority: 'low' | 'medium' | 'high';
   status: 'pending' | 'in-progress' | 'completed';
   goalId?: string;
+  milestoneId?: string; // New field linking task to milestone
   createdAt: string;
   updatedAt: string;
 }

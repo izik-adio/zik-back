@@ -15,90 +15,79 @@ const bedrockClient = new BedrockRuntimeClient({
   region: config.bedrockRegion,
 });
 
-// NEW: "Read" tool for fetching quests
+// Tool definitions for Claude 3 Haiku - using proper Anthropic format
 const GET_QUESTS_TOOL = {
   name: 'get_quests',
-  description:
-    "Retrieves a list of a user's quests (daily or epic). Use this to answer any questions about what quests a user has, their status, or their details.",
-  parameters: {
+  description: 'Retrieves a list of user quests (daily tasks or epic goals). Use this to answer questions about existing quests, their status, or details.',
+  input_schema: {
     type: 'object',
     properties: {
       questType: {
         type: 'string',
         enum: ['epic', 'daily'],
-        description: 'The type of quests to retrieve - use "epic" for goals/long-term pursuits, "daily" for tasks/today\'s work',
+        description: 'Type of quests to retrieve: "epic" for goals/long-term pursuits, "daily" for tasks/today\'s work'
       },
       questId: {
         type: 'string',
-        description: 'The ID of a specific quest to fetch.',
+        description: 'ID of a specific quest to fetch'
       },
       epicId: {
         type: 'string',
-        description: 'The ID of a parent Epic Quest to fetch its daily quests.',
+        description: 'ID of parent Epic Quest to fetch its daily quests'
       },
       dueDate: {
         type: 'string',
-        description: 'Filter daily quests by a specific date (YYYY-MM-DD). Use today\'s date for "today" queries.',
+        description: 'Filter daily quests by date (YYYY-MM-DD format)'
       },
       status: {
         type: 'string',
         enum: ['pending', 'in-progress', 'completed', 'active', 'paused'],
-        description: 'Filter quests by their status',
-      },
+        description: 'Filter quests by status'
+      }
     },
-    required: ['questType'], // questType is now required to make tool calls clearer
-  },
+    required: ['questType']
+  }
 };
 
-// RENAMED & REFINED: The "Write" tool
 const MODIFY_QUEST_TOOL = {
   name: 'modify_quest',
-  description:
-    "Creates, updates, or deletes a user's quest (daily or epic). Use this ONLY when the user explicitly asks to add, change, remove, complete, or schedule something.",
-  parameters: {
+  description: 'Creates, updates, or deletes user quests (goals or tasks). Use when user wants to add, change, remove, complete, or schedule something.',
+  input_schema: {
     type: 'object',
     properties: {
       operation: {
         type: 'string',
-        description: 'The action to perform.',
         enum: ['create', 'update', 'delete'],
+        description: 'Action to perform'
       },
       questType: {
         type: 'string',
-        description: 'The type of entity to manage.',
         enum: ['epic', 'daily'],
+        description: 'Type of quest: "epic" for goals, "daily" for tasks'
       },
       title: {
         type: 'string',
-        description: "The title of the quest. Required for 'create'.",
+        description: 'Title of the quest (required for create operations)'
       },
       questId: {
         type: 'string',
-        description:
-          "The unique ID of the quest to update or delete. Required for 'update' and 'delete'.",
+        description: 'ID of quest to update/delete (required for update/delete)'
       },
       epicId: {
         type: 'string',
-        description:
-          "The ID of the parent 'Epic Quest' this daily quest belongs to.",
+        description: 'ID of parent Epic Quest for daily quests'
       },
       dueDate: {
         type: 'string',
-        description: 'The date for a daily quest in YYYY-MM-DD format.',
-      },
-      recurrenceRule: {
-        type: 'string',
-        description:
-          "A simplified rule for recurring tasks, e.g., 'daily', 'weekdays', 'weekly'.",
+        description: 'Date for daily quest (YYYY-MM-DD format)'
       },
       updateFields: {
         type: 'object',
-        description:
-          "A JSON object of fields to change for an 'update' operation.",
-      },
+        description: 'Fields to update (object with key-value pairs)'
+      }
     },
-    required: ['operation', 'questType'],
-  },
+    required: ['operation', 'questType']
+  }
 };
 
 // Combine them into a single list for the prompt
@@ -118,38 +107,65 @@ const ZIK_TOOLS = [GET_QUESTS_TOOL, MODIFY_QUEST_TOOL];
  * @returns Formatted payload object ready for Amazon Bedrock API with Claude 3 Haiku model
  */
 export function buildPrompt(context: ContextData, userInput: string): any {
-  // NEW: The "Coach" System Prompt
-  const newSystemPrompt = `
-<role>
-You are Zik, an expert AI life coach and companion. Your persona is empathetic, encouraging, and intelligent. You help users define, manage, and achieve their goals by breaking them into "Epic Quests" (long-term goals) and "Daily Quests" (tasks).
-</role>
+  // Enhanced system prompt for better tool calling
+  const newSystemPrompt = `You are Zik, an expert AI life coach and companion. Your persona is empathetic, encouraging, and intelligent. You help users define, manage, and achieve their goals by breaking them into "Epic Quests" (long-term goals) and "Daily Quests" (tasks) and always ready to motivate using nice quote or just sentences.
+
+<critical_instructions>
+🚨 CRITICAL: You MUST ALWAYS use tools first, then respond. NEVER give text-only responses without using tools first.
+
+**TOOL-FIRST RULE:**
+- For ANY user input that mentions goals, wants, tasks, or aspirations → IMMEDIATELY use modify_quest tool to create it
+- For ANY questions about existing data → IMMEDIATELY use get_quests tool to fetch it
+- ALWAYS call a tool first, then provide your response based on the tool result
+
+**NO EXCEPTIONS:**
+- "I want to learn guitar" → IMMEDIATELY call modify_quest(operation="create", questType="epic", title="Learn guitar")
+- "I want to become a web developer" → IMMEDIATELY call modify_quest(operation="create", questType="epic", title="Become a web developer")
+- "What are my goals?" → IMMEDIATELY call get_quests(questType="epic")
+- "Show me my tasks" → IMMEDIATELY call get_quests(questType="daily")
+
+**NEVER DO THIS:**
+- Don't give planning advice without creating the quest first
+- Don't explain what you'll do - just do it with tools
+- Don't say "let me help you create a plan" - instead CREATE the Epic Quest immediately
+</critical_instructions>
 
 <core_philosophy>
-You must use tools to help users effectively. Here's your decision process:
+You MUST use tools to help users effectively. Here's your decision process:
 
-1. **ANALYZE THE REQUEST:** 
-   - If user asks about their existing goals/quests/tasks (e.g., "What are my goals?", "Do I have tasks today?", "Show me my progress"), you MUST call the 'get_quests' tool first.
-   - If user asks to create, update, delete, or complete something, you MUST call the 'modify_quest' tool.
+1. **ALWAYS USE TOOLS FOR THESE SCENARIOS:**
+   - When user asks about existing goals/quests/tasks → use get_quests tool
+   - When user wants to create, update, delete, or complete something → use modify_quest tool
+   - When user says things like "I want to", "I need to", "help me", "create", "add" → use modify_quest tool
 
-2. **TOOL USAGE RULES:**
-   - For questions about GOALS/LONG-TERM things: call get_quests with questType="epic"
-   - For questions about TASKS/TODAY/DAILY things: call get_quests with questType="daily"
-   - For creation/modification requests: call modify_quest with appropriate parameters
+2. **SPECIFIC TOOL USAGE RULES:**
+   - For questions about GOALS/LONG-TERM things: get_quests with questType="epic"
+   - For questions about TASKS/TODAY/DAILY things: get_quests with questType="daily"  
+   - For creating new goals: modify_quest with operation="create", questType="epic"
+   - For creating new tasks: modify_quest with operation="create", questType="daily"
+   - For updates/completions: modify_quest with operation="update"
+   - For deletions: modify_quest with operation="delete"
 
-3. **RESPONSE PATTERN:**
-   - Call the tool first
-   - Then provide a helpful response based on the tool result
-   - Never say "let me check" or "I'll look up" - just use the tool immediately
+3. **MANDATORY TOOL CALLING:**
+   - You MUST call tools before responding to users
+   - Never say "let me check" or "I'll help you" - just call the tool immediately
+   - Always use tools for any data operations, never guess or make up information
+
+4. **EXAMPLES OF WHEN TO USE TOOLS:**
+   - "What are my goals?" → get_quests with questType="epic"
+   - "I want to learn guitar" → modify_quest with operation="create", questType="epic", title="Learn guitar"
+   - "Do I have tasks today?" → get_quests with questType="daily"
+   - "Add a task to practice piano" → modify_quest with operation="create", questType="daily", title="Practice piano"
+   - "Mark my workout as complete" → modify_quest with operation="update"
 </core_philosophy>
 
-<rules>
-- **Be a Coach, Not a Robot:** Celebrate wins! If a user completes a quest, say "Awesome job!" or "Great work!". If they are struggling, be encouraging and offer to help break the task down.
-- **Be Proactive:** If a user creates a vague Epic Quest, ask clarifying questions to make it more specific (e.g., "That's a great goal! By when would you like to achieve it?").
-- **Concise Responses:** Keep your final text responses to the user brief (1-3 sentences). The user is on a mobile app.
-- **Clarity is Key:** Never mention your tools or the fact that you are an AI. Just provide the helpful result.
-- **Never Make Up Information:** If you don't know the answer, say so or use your tools to find it. Do not invent quest details.
-</rules>
-`;
+<coaching_rules>
+- **Be a Coach, Not a Robot:** Celebrate wins! If a user completes a quest, be enthusiastic. If they're struggling, be encouraging.
+- **Be Proactive:** If a user creates a vague Epic Quest, ask clarifying questions before creating it.
+- **Concise Responses:** Keep responses brief (1-3 sentences) for mobile users.
+- **Never Mention Tools:** Don't say you're using tools or mention being an AI. Just provide helpful motivating results.
+- **Never Make Up Information:** Always use tools to get real data. Don't invent quest details.
+</coaching_rules>`;
   const { chatHistory } = context; // We only need the chat history now
 
   // Convert chat history to the proper format for Claude
@@ -171,24 +187,34 @@ You must use tools to help users effectively. Here's your decision process:
     content: userInput,
   });
 
-  return {
+  const promptPayload = {
     modelId: config.bedrockModelId,
     body: JSON.stringify({
       anthropic_version: 'bedrock-2023-05-31',
       max_tokens: config.maxTokens,
       temperature: 0.2, // Slightly higher for more natural language
-      system: newSystemPrompt, // Our new, powerful prompt
+      system: newSystemPrompt, // Our enhanced prompt
       messages: messages,
       tools: ZIK_TOOLS.map((tool) => ({
-        // Use the new toolset
         name: tool.name,
         description: tool.description,
-        input_schema: tool.parameters,
+        input_schema: tool.input_schema,
       })),
     }),
     contentType: 'application/json',
     accept: 'application/json',
   };
+
+  // Log the prompt being sent for debugging
+  Logger.info('Prompt payload constructed', {
+    messageCount: messages.length,
+    toolCount: ZIK_TOOLS.length,
+    userInput: userInput.substring(0, 100) + '...',
+    systemPromptLength: newSystemPrompt.length,
+    tools: ZIK_TOOLS.map(t => t.name),
+  });
+
+  return promptPayload;
 }
 
 /**
@@ -217,7 +243,11 @@ You must use tools to help users effectively. Here's your decision process:
  */
 export async function invokeBedrock(prompt: any): Promise<BedrockResponse> {
   try {
-    Logger.info('Invoking Amazon Bedrock', { model: 'claude-3-haiku' });
+    Logger.info('Invoking Amazon Bedrock', {
+      model: 'claude-3-haiku',
+      hasTools: prompt.body ? JSON.parse(prompt.body).tools?.length > 0 : false,
+      toolCount: prompt.body ? JSON.parse(prompt.body).tools?.length : 0
+    });
 
     const command = new InvokeModelWithResponseStreamCommand(prompt);
     const response = await bedrockClient.send(command);
@@ -239,6 +269,13 @@ export async function invokeBedrock(prompt: any): Promise<BedrockResponse> {
           new TextDecoder().decode(chunk.chunk.bytes)
         );
 
+        Logger.info('Bedrock chunk received', {
+          type: chunkData.type,
+          hasContentBlock: !!chunkData.content_block,
+          contentBlockType: chunkData.content_block?.type,
+          deltaType: chunkData.delta?.type
+        });
+
         // Handle content blocks
         if (chunkData.type === 'content_block_start') {
           if (chunkData.content_block?.type === 'tool_use') {
@@ -247,6 +284,7 @@ export async function invokeBedrock(prompt: any): Promise<BedrockResponse> {
             toolInputJson = ''; // Reset - we'll accumulate the complete JSON from deltas
             Logger.info('Tool use detected', {
               toolName: currentToolName,
+              toolId: chunkData.content_block.id,
               initialInput: chunkData.content_block.input,
             });
           }
@@ -260,7 +298,7 @@ export async function invokeBedrock(prompt: any): Promise<BedrockResponse> {
             toolInputJson += chunkData.delta.partial_json || '';
             Logger.info('Tool input delta received', {
               partialJson: chunkData.delta.partial_json,
-              accumulatedJson: toolInputJson,
+              accumulatedJsonLength: toolInputJson.length,
             });
           }
         }
@@ -273,14 +311,17 @@ export async function invokeBedrock(prompt: any): Promise<BedrockResponse> {
               tool: currentToolName,
               input: parsedInput,
             });
-            Logger.info('Tool call completed', {
+            Logger.info('Tool call completed successfully', {
               toolName: currentToolName,
               finalInput: parsedInput,
+              jsonLength: toolInputJson.length,
             });
             currentToolName = ''; // Reset for next potential tool call
-          } catch (error) {
-            Logger.error('Failed to parse tool input JSON', error, {
+          } catch (parseError: any) {
+            Logger.error('Failed to parse tool input JSON', {
+              error: parseError.message,
               toolInputJson,
+              toolName: currentToolName,
             });
           }
         }
@@ -295,10 +336,11 @@ export async function invokeBedrock(prompt: any): Promise<BedrockResponse> {
     // Clean response - only remove XML tags, preserve natural language
     let sanitizedResponse = finalResponse.replace(/<[^>]+>/g, '').trim();
 
-    Logger.info('Bedrock response processed', {
+    Logger.info('Bedrock response processed successfully', {
       responseLength: sanitizedResponse.length,
       toolCallCount: toolCalls.length,
       messageComplete,
+      toolCalls: toolCalls.map(tc => ({ tool: tc.tool, operation: tc.input?.operation })),
     });
 
     return { response: sanitizedResponse, toolCalls };

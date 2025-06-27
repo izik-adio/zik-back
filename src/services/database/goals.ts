@@ -70,7 +70,7 @@ export async function fetchActiveGoals(userId: string): Promise<Goal[]> {
 export async function createGoal(
   userId: string,
   title: string
-): Promise<string> {
+): Promise<{ message: string; goalId: string }> {
   // Validate required fields
   if (!title || title.trim().length === 0) {
     throw new ValidationError('Title is required and cannot be empty');
@@ -91,6 +91,7 @@ export async function createGoal(
       goalId,
       goalName: title.trim(),
       status: 'active',
+      roadmapStatus: 'none', // New field for roadmap status
       createdAt: now,
       updatedAt: now,
     };
@@ -109,7 +110,10 @@ export async function createGoal(
       userId,
     });
 
-    return `✅ Epic Quest created: '${title}'! 🎯`;
+    return {
+      message: `✅ Epic Quest created: '${title}'! 🎯`,
+      goalId,
+    };
   } catch (error) {
     Logger.error('Failed to create goal', error, { title, userId });
     throw new DatabaseError('Failed to create goal', error);
@@ -149,6 +153,7 @@ export async function updateGoal(
     'targetDate',
     'category',
     'status',
+    'roadmapStatus',
   ];
   const invalidFields = Object.keys(updateFields).filter(
     (field) => !allowedFields.includes(field) && field !== 'updatedAt'
@@ -166,6 +171,16 @@ export async function updateGoal(
     if (!validStatuses.includes(updateFields.status)) {
       throw new ValidationError(
         `Invalid status for epic: ${updateFields.status}`
+      );
+    }
+  }
+
+  // Validate roadmapStatus values
+  if (updateFields.roadmapStatus) {
+    const validRoadmapStatuses = ['none', 'generating', 'ready'];
+    if (!validRoadmapStatuses.includes(updateFields.roadmapStatus)) {
+      throw new ValidationError(
+        `Invalid roadmap status for epic: ${updateFields.roadmapStatus}`
       );
     }
   }
@@ -299,5 +314,45 @@ export async function deleteGoal(
     }
     Logger.error('Failed to delete goal', error, { goalId, userId });
     throw new DatabaseError('Failed to delete goal', error);
+  }
+}
+
+/**
+ * Fetches a specific goal by ID for a user from Goals table
+ * @param userId - The user's unique identifier
+ * @param goalId - The goal's unique identifier
+ * @returns Promise<Goal | null> - The goal or null if not found
+ * @throws DatabaseError - If database operation fails
+ */
+export async function getGoalById(userId: string, goalId: string): Promise<Goal | null> {
+  try {
+    Logger.debug('Fetching goal by ID', { userId, goalId });
+
+    const command = new GetCommand({
+      TableName: config.goalsTableName,
+      Key: {
+        userId,
+        goalId,
+      },
+    });
+
+    const result = await docClient.send(command);
+
+    if (!result.Item) {
+      Logger.debug('Goal not found', { userId, goalId });
+      return null;
+    }
+
+    const goal = result.Item as Goal;
+    Logger.debug('Goal fetched successfully', { userId, goalId });
+
+    return goal;
+  } catch (error: any) {
+    Logger.error('Error fetching goal by ID', {
+      userId,
+      goalId,
+      error: error.message,
+    });
+    throw new DatabaseError('Failed to fetch goal');
   }
 }

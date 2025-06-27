@@ -344,3 +344,151 @@ export async function deleteTask(
     throw new DatabaseError('Failed to delete task', error);
   }
 }
+
+/**
+ * Creates multiple tasks in batch (for roadmap/milestone quest generation)
+ * @param tasks - Array of task data to create
+ * @returns Promise<Task[]> - Array of created tasks
+ * @throws ValidationError - If input validation fails
+ * @throws DatabaseError - If database operation fails
+ */
+export async function createTasksBatch(
+  tasks: Omit<Task, 'taskId' | 'createdAt' | 'updatedAt'>[]
+): Promise<Task[]> {
+  if (!tasks || tasks.length === 0) {
+    throw new ValidationError('Tasks array cannot be empty');
+  }
+
+  const now = new Date().toISOString();
+  const tasksToCreate: Task[] = tasks.map((task) => {
+    // Validate required fields
+    if (!task.taskName || task.taskName.trim().length === 0) {
+      throw new ValidationError('Task name is required and cannot be empty');
+    }
+
+    if (!task.dueDate || !isValidDateFormat(task.dueDate)) {
+      throw new ValidationError('Valid due date in YYYY-MM-DD format is required');
+    }
+
+    return {
+      ...task,
+      taskId: randomUUID(),
+      taskName: task.taskName.trim(),
+      createdAt: now,
+      updatedAt: now,
+    };
+  });
+
+  try {
+    // For batch operations, we'll create them one by one to ensure proper error handling
+    // In a production system, you might want to use DynamoDB batch operations
+    const createdTasks: Task[] = [];
+
+    for (const task of tasksToCreate) {
+      const command = new PutCommand({
+        TableName: config.tasksTableName,
+        Item: task,
+      });
+
+      await docClient.send(command);
+      createdTasks.push(task);
+    }
+
+    Logger.info('Tasks batch created successfully', {
+      userId: tasks[0]?.userId,
+      count: createdTasks.length,
+    });
+
+    return createdTasks;
+  } catch (error: any) {
+    Logger.error('Failed to create tasks batch', error);
+    throw new DatabaseError('Failed to create tasks batch', error);
+  }
+}
+
+/**
+ * Fetches tasks for a specific milestone
+ * @param userId - The user's unique identifier
+ * @param milestoneId - The milestone ID to filter by
+ * @returns Promise<Task[]> - Array of tasks for the milestone
+ * @throws DatabaseError - If database operation fails
+ */
+export async function fetchTasksByMilestone(
+  userId: string,
+  milestoneId: string
+): Promise<Task[]> {
+  try {
+    Logger.debug('Fetching tasks by milestone', { userId, milestoneId });
+
+    const command = new QueryCommand({
+      TableName: config.tasksTableName,
+      KeyConditionExpression: 'userId = :userId',
+      FilterExpression: '#milestoneId = :milestoneId',
+      ExpressionAttributeNames: {
+        '#milestoneId': 'milestoneId',
+      },
+      ExpressionAttributeValues: {
+        ':userId': userId,
+        ':milestoneId': milestoneId,
+      },
+    });
+
+    const result = await docClient.send(command);
+    const tasks = (result.Items as Task[]) || [];
+
+    Logger.debug('Tasks by milestone fetched successfully', {
+      userId,
+      milestoneId,
+      count: tasks.length,
+    });
+
+    return tasks;
+  } catch (error: any) {
+    Logger.error('Error fetching tasks by milestone', {
+      userId,
+      milestoneId,
+      error: error.message,
+    });
+    throw new DatabaseError('Failed to fetch tasks by milestone');
+  }
+}
+
+/**
+ * Fetches a specific task by ID
+ * @param userId - The user's unique identifier
+ * @param taskId - The task ID to fetch
+ * @returns Promise<Task | null> - The task or null if not found
+ * @throws DatabaseError - If database operation fails
+ */
+export async function getTaskById(userId: string, taskId: string): Promise<Task | null> {
+  try {
+    Logger.debug('Fetching task by ID', { userId, taskId });
+
+    const command = new GetCommand({
+      TableName: config.tasksTableName,
+      Key: {
+        userId,
+        taskId,
+      },
+    });
+
+    const result = await docClient.send(command);
+
+    if (!result.Item) {
+      Logger.debug('Task not found', { userId, taskId });
+      return null;
+    }
+
+    const task = result.Item as Task;
+    Logger.debug('Task fetched successfully', { userId, taskId });
+
+    return task;
+  } catch (error: any) {
+    Logger.error('Error fetching task by ID', {
+      userId,
+      taskId,
+      error: error.message,
+    });
+    throw new DatabaseError('Failed to fetch task');
+  }
+}

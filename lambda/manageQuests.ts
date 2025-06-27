@@ -5,7 +5,16 @@ import {
   createTask,
   updateTask,
   deleteTask,
+  getTaskById,
+  fetchTasksByMilestone,
 } from '../src/services/database/tasks';
+import {
+  getMilestonesByEpicId,
+  getNextMilestone,
+  updateMilestone,
+} from '../src/services/database/milestones';
+import { updateGoal } from '../src/services/database/goals';
+import { generateDailyQuestsForMilestone } from '../src/services/stepFunctionService';
 import {
   createSuccessResponse,
   createErrorResponse,
@@ -174,6 +183,12 @@ async function handleUpdateTask(
     }
     const result = await updateTask(userId, taskId, body);
     Logger.info('Task updated successfully', { userId, taskId, requestId });
+
+    // Check if this task was completed and if it triggers milestone progression
+    if (body.status === 'completed') {
+      await checkAndUpdateMilestoneCompletion(userId, taskId, requestId);
+    }
+
     return createSuccessResponse({ message: result }, requestId);
   } catch (error) {
     Logger.error('Failed to update task', {
@@ -206,5 +221,96 @@ async function handleDeleteTask(
       requestId,
     });
     return createErrorResponse(500, 'Failed to delete task', requestId);
+  }
+}
+
+/**
+ * Check and update milestone completion status based on task updates
+ */
+async function checkAndUpdateMilestoneCompletion(
+  userId: string,
+  taskId: string,
+  requestId: string
+) {
+  try {
+    // Fetch the updated task
+    const task = await getTaskById(userId, taskId);
+    if (!task || !task.milestoneId) {
+      // Task is not part of a milestone, nothing to check
+      return;
+    }
+
+    const { milestoneId, goalId } = task;
+
+    if (!goalId) {
+      Logger.warn('Task has milestoneId but no goalId', { taskId, milestoneId, requestId });
+      return;
+    }
+
+    // Get all tasks for this milestone
+    const milestoneTasks = await fetchTasksByMilestone(userId, milestoneId);
+
+    // Check if all tasks for this milestone are completed
+    const pendingTasks = milestoneTasks.filter(task =>
+      task.status === 'pending' || task.status === 'in-progress'
+    );
+
+    if (pendingTasks.length === 0) {
+      // All tasks for this milestone are completed!
+      Logger.info('Milestone completed, triggering progression', {
+        userId,
+        milestoneId,
+        goalId,
+        requestId,
+      });
+
+      // Get all milestones for this epic to find the current sequence
+      const milestones = await getMilestonesByEpicId(goalId);
+      const currentMilestone = milestones.find(m => m.milestoneId === milestoneId);
+
+      if (!currentMilestone) {
+        Logger.error('Could not find current milestone', { milestoneId, goalId, requestId });
+        return;
+      }
+
+      // Mark current milestone as completed
+      await updateMilestone(goalId, currentMilestone.sequence, { status: 'completed' });
+
+      // Find and activate the next milestone
+      const nextMilestone = await getNextMilestone(goalId, currentMilestone.sequence);
+
+      if (nextMilestone) {
+        // Activate the next milestone
+        await updateMilestone(goalId, nextMilestone.sequence, { status: 'active' });
+
+        // Generate daily quests for the next milestone
+        await generateDailyQuestsForMilestone(goalId, nextMilestone.sequence, userId);
+
+        Logger.info('Next milestone activated and quests generated', {
+          userId,
+          goalId,
+          nextMilestoneId: nextMilestone.milestoneId,
+          nextSequence: nextMilestone.sequence,
+          requestId,
+        });
+      } else {
+        // No more milestones - the entire epic quest is complete!
+        await updateGoal(userId, goalId, { status: 'completed' });
+
+        Logger.info('Epic quest completed - all milestones finished', {
+          userId,
+          goalId,
+          requestId,
+        });
+      }
+    }
+  } catch (error) {
+    // Log the error but don't fail the task update
+    Logger.error('Error checking milestone completion', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      userId,
+      taskId,
+      requestId,
+    });
   }
 }

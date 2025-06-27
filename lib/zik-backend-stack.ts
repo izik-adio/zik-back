@@ -16,6 +16,8 @@ import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as stepfunctions from 'aws-cdk-lib/aws-stepfunctions';
+import * as stepfunctionsTasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 
 export class ZikBackendStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -141,6 +143,14 @@ export class ZikBackendStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
+    // Milestones Table - New table for roadmap milestones
+    const milestonesTable = new dynamodb.Table(this, 'MilestonesTable', {
+      partitionKey: { name: 'epicId', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'sequence', type: dynamodb.AttributeType.NUMBER },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
     // --- Single Lambda Function for Quest Management ---
     const lambdaBaseDir = path.join(__dirname, '../lambda');
 
@@ -168,9 +178,12 @@ export class ZikBackendStack extends cdk.Stack {
           CHAT_MESSAGES_TABLE_NAME: chatMessagesTable.tableName,
           USERS_TABLE_NAME: usersTable.tableName,
           RECURRENCE_RULES_TABLE_NAME: recurrenceRulesTable.tableName,
+          MILESTONES_TABLE_NAME: milestonesTable.tableName,
           USER_ID_DUE_DATE_INDEX: tasksUserDueDateIndexName,
           USER_POOL_ID: userPool.userPoolId,
           USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
+          ROADMAP_GENERATOR_WORKFLOW_ARN: '', // Will be set after Step Function creation
+          DAILY_QUEST_GENERATOR_LAMBDA_ARN: '', // Will be set after Lambda creation
         },
       }
     );
@@ -179,6 +192,7 @@ export class ZikBackendStack extends cdk.Stack {
     goalsTable.grantReadWriteData(manageQuestsHandler); // Changed to allow delete
     tasksTable.grantReadWriteData(manageQuestsHandler);
     chatMessagesTable.grantReadWriteData(manageQuestsHandler);
+    milestonesTable.grantReadWriteData(manageQuestsHandler);
 
     // Grant Cognito permissions for token verification
     userPool.grant(manageQuestsHandler, 'cognito-idp:GetUser');
@@ -194,6 +208,7 @@ export class ZikBackendStack extends cdk.Stack {
         CHAT_MESSAGES_TABLE_NAME: chatMessagesTable.tableName,
         USERS_TABLE_NAME: usersTable.tableName,
         RECURRENCE_RULES_TABLE_NAME: recurrenceRulesTable.tableName,
+        MILESTONES_TABLE_NAME: milestonesTable.tableName,
         USER_ID_DUE_DATE_INDEX: tasksUserDueDateIndexName,
         USER_POOL_ID: userPool.userPoolId,
         USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
@@ -202,6 +217,7 @@ export class ZikBackendStack extends cdk.Stack {
 
     // Grant permissions to the goals handler Lambda
     goalsTable.grantReadWriteData(manageGoalsHandler);
+    milestonesTable.grantReadWriteData(manageGoalsHandler);
 
     // Grant Cognito permissions for token verification
     userPool.grant(manageGoalsHandler, 'cognito-idp:GetUser');
@@ -300,6 +316,16 @@ export class ZikBackendStack extends cdk.Stack {
       ),
       authorizer: cognitoAuthorizer,
     });
+    // Add GET /goals/{goalId}/milestones
+    httpApi.addRoutes({
+      path: '/goals/{goalId}/milestones',
+      methods: [apigatewayv2.HttpMethod.GET],
+      integration: new HttpLambdaIntegration(
+        'GetMilestonesIntegration',
+        manageGoalsHandler
+      ),
+      authorizer: cognitoAuthorizer,
+    });
 
     // --- Chat Handler Lambda - Handles AI-powered chat interactions ---
     const chatHandler = new NodejsFunction(this, 'ChatHandler', {
@@ -312,9 +338,12 @@ export class ZikBackendStack extends cdk.Stack {
         CHAT_MESSAGES_TABLE_NAME: chatMessagesTable.tableName,
         USERS_TABLE_NAME: usersTable.tableName,
         RECURRENCE_RULES_TABLE_NAME: recurrenceRulesTable.tableName,
+        MILESTONES_TABLE_NAME: milestonesTable.tableName,
         USER_ID_DUE_DATE_INDEX: tasksUserDueDateIndexName,
         USER_POOL_ID: userPool.userPoolId,
         USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
+        ROADMAP_GENERATOR_WORKFLOW_ARN: '', // Will be set after Step Function creation
+        DAILY_QUEST_GENERATOR_LAMBDA_ARN: '', // Will be set after Lambda creation
       },
     });
 
@@ -324,6 +353,7 @@ export class ZikBackendStack extends cdk.Stack {
     chatMessagesTable.grantReadWriteData(chatHandler);
     usersTable.grantReadData(chatHandler);
     recurrenceRulesTable.grantReadWriteData(chatHandler);
+    milestonesTable.grantReadWriteData(chatHandler);
 
     // Grant Cognito permissions for token verification
     userPool.grant(chatHandler, 'cognito-idp:GetUser');
@@ -388,6 +418,161 @@ export class ZikBackendStack extends cdk.Stack {
       new targets.LambdaFunction(recurringTaskGeneratorLambda)
     );
 
+    // --- Roadmap Engine Step Function Components ---
+
+    // Roadmap Generator Lambda - generates milestone roadmap using Planner AI
+    const roadmapGeneratorLambda = new NodejsFunction(
+      this,
+      'RoadmapGeneratorLambda',
+      {
+        ...commonLambdaProps,
+        entry: path.join(__dirname, '../src/lambda/roadmapGenerator/index.ts'),
+        handler: 'handler',
+        environment: {
+          CHAT_MESSAGES_TABLE_NAME: chatMessagesTable.tableName,
+          GOALS_TABLE_NAME: goalsTable.tableName,
+          TASKS_TABLE_NAME: tasksTable.tableName,
+          USERS_TABLE_NAME: usersTable.tableName,
+          RECURRENCE_RULES_TABLE_NAME: recurrenceRulesTable.tableName,
+          MILESTONES_TABLE_NAME: milestonesTable.tableName,
+          USER_ID_DUE_DATE_INDEX: tasksUserDueDateIndexName,
+          USER_POOL_ID: userPool.userPoolId,
+          USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
+        },
+        timeout: Duration.minutes(3), // Allow more time for AI processing
+      }
+    );
+
+    // Milestone Saver Lambda - saves generated milestones to database
+    const milestoneSaverLambda = new NodejsFunction(
+      this,
+      'MilestoneSaverLambda',
+      {
+        ...commonLambdaProps,
+        entry: path.join(__dirname, '../src/lambda/milestoneSaver/index.ts'),
+        handler: 'handler',
+        environment: {
+          CHAT_MESSAGES_TABLE_NAME: chatMessagesTable.tableName,
+          GOALS_TABLE_NAME: goalsTable.tableName,
+          TASKS_TABLE_NAME: tasksTable.tableName,
+          USERS_TABLE_NAME: usersTable.tableName,
+          RECURRENCE_RULES_TABLE_NAME: recurrenceRulesTable.tableName,
+          MILESTONES_TABLE_NAME: milestonesTable.tableName,
+          USER_ID_DUE_DATE_INDEX: tasksUserDueDateIndexName,
+          USER_POOL_ID: userPool.userPoolId,
+          USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
+        },
+        timeout: Duration.minutes(2),
+      }
+    );
+
+    // Daily Quest Generator Lambda - generates daily tasks for milestones using Coach AI
+    const dailyQuestGeneratorLambda = new NodejsFunction(
+      this,
+      'DailyQuestGeneratorLambda',
+      {
+        ...commonLambdaProps,
+        entry: path.join(__dirname, '../src/lambda/dailyQuestGenerator/index.ts'),
+        handler: 'handler',
+        environment: {
+          CHAT_MESSAGES_TABLE_NAME: chatMessagesTable.tableName,
+          GOALS_TABLE_NAME: goalsTable.tableName,
+          TASKS_TABLE_NAME: tasksTable.tableName,
+          USERS_TABLE_NAME: usersTable.tableName,
+          RECURRENCE_RULES_TABLE_NAME: recurrenceRulesTable.tableName,
+          MILESTONES_TABLE_NAME: milestonesTable.tableName,
+          USER_ID_DUE_DATE_INDEX: tasksUserDueDateIndexName,
+          USER_POOL_ID: userPool.userPoolId,
+          USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
+        },
+        timeout: Duration.minutes(3), // Allow more time for AI processing
+      }
+    );
+
+    // Grant permissions for roadmap engine Lambdas
+    goalsTable.grantReadData(roadmapGeneratorLambda);
+    milestonesTable.grantReadWriteData(milestoneSaverLambda);
+    goalsTable.grantReadWriteData(milestoneSaverLambda);
+
+    milestonesTable.grantReadData(dailyQuestGeneratorLambda);
+    goalsTable.grantReadData(dailyQuestGeneratorLambda);
+    tasksTable.grantWriteData(dailyQuestGeneratorLambda);
+
+    // Grant Bedrock permissions for AI-powered Lambdas
+    roadmapGeneratorLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'bedrock:InvokeModel',
+          'bedrock:InvokeModelWithResponseStream',
+        ],
+        resources: ['*'],
+      })
+    );
+
+    dailyQuestGeneratorLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'bedrock:InvokeModel',
+          'bedrock:InvokeModelWithResponseStream',
+        ],
+        resources: ['*'],
+      })
+    );
+
+    // Define Step Function State Machine for Roadmap Generation Workflow
+    const generateRoadmapTask = new stepfunctionsTasks.LambdaInvoke(this, 'GenerateRoadmapTask', {
+      lambdaFunction: roadmapGeneratorLambda,
+      resultPath: '$.roadmapResult',
+    });
+
+    const saveMilestonesTask = new stepfunctionsTasks.LambdaInvoke(this, 'SaveMilestonesTask', {
+      lambdaFunction: milestoneSaverLambda,
+      inputPath: '$.roadmapResult.Payload',
+      resultPath: '$.saveResult',
+    });
+
+    const generateInitialQuestsTask = new stepfunctionsTasks.LambdaInvoke(this, 'GenerateInitialQuestsTask', {
+      lambdaFunction: dailyQuestGeneratorLambda,
+      inputPath: '$.saveResult.Payload',
+      resultPath: '$.questsResult',
+    });
+
+    // Define the workflow chain
+    const definition = generateRoadmapTask
+      .next(saveMilestonesTask)
+      .next(generateInitialQuestsTask);
+
+    // Create the Step Function State Machine
+    const roadmapGeneratorWorkflow = new stepfunctions.StateMachine(this, 'RoadmapGeneratorWorkflow', {
+      definition,
+      timeout: Duration.minutes(15), // Overall workflow timeout
+    });
+
+    // Grant the Step Function permission to invoke the Lambdas
+    roadmapGeneratorLambda.grantInvoke(roadmapGeneratorWorkflow);
+    milestoneSaverLambda.grantInvoke(roadmapGeneratorWorkflow);
+    dailyQuestGeneratorLambda.grantInvoke(roadmapGeneratorWorkflow);
+
+    // Grant chatHandler permission to start the Step Function
+    roadmapGeneratorWorkflow.grantStartExecution(chatHandler);
+    roadmapGeneratorWorkflow.grantStartExecution(manageQuestsHandler);
+
+    // Update environment variables with ARNs (using addEnvironment after creation)
+    chatHandler.addEnvironment('ROADMAP_GENERATOR_WORKFLOW_ARN', roadmapGeneratorWorkflow.stateMachineArn);
+    chatHandler.addEnvironment('DAILY_QUEST_GENERATOR_LAMBDA_ARN', dailyQuestGeneratorLambda.functionArn);
+
+    // Add environment variables to manageQuestsHandler as well
+    manageQuestsHandler.addEnvironment('ROADMAP_GENERATOR_WORKFLOW_ARN', roadmapGeneratorWorkflow.stateMachineArn);
+    manageQuestsHandler.addEnvironment('DAILY_QUEST_GENERATOR_LAMBDA_ARN', dailyQuestGeneratorLambda.functionArn);
+
+    // Grant chatHandler permission to invoke the daily quest generator directly
+    dailyQuestGeneratorLambda.grantInvoke(chatHandler);
+
+    // Grant manageQuestsHandler permission to invoke the daily quest generator directly
+    dailyQuestGeneratorLambda.grantInvoke(manageQuestsHandler);
+
     // --- CDK Outputs ---
     new cdk.CfnOutput(this, 'ApiEndpointOutput', {
       value: httpApi.url!,
@@ -419,6 +604,11 @@ export class ZikBackendStack extends cdk.Stack {
       description: 'ChatMessages DynamoDB table name',
     });
 
+    new cdk.CfnOutput(this, 'MilestonesTableNameOutput', {
+      value: milestonesTable.tableName,
+      description: 'Milestones DynamoDB table name',
+    });
+
     new cdk.CfnOutput(this, 'UserPoolIdOutput', {
       value: userPool.userPoolId,
       description: 'Cognito User Pool ID',
@@ -427,6 +617,16 @@ export class ZikBackendStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'UserPoolClientIdOutput', {
       value: userPoolClient.userPoolClientId,
       description: 'Cognito User Pool Client ID',
+    });
+
+    new cdk.CfnOutput(this, 'RoadmapGeneratorWorkflowArnOutput', {
+      value: roadmapGeneratorWorkflow.stateMachineArn,
+      description: 'Roadmap Generator Step Function ARN',
+    });
+
+    new cdk.CfnOutput(this, 'DailyQuestGeneratorLambdaArnOutput', {
+      value: dailyQuestGeneratorLambda.functionArn,
+      description: 'Daily Quest Generator Lambda ARN',
     });
   }
 }

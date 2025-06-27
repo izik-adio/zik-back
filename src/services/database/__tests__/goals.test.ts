@@ -82,9 +82,12 @@ describe('Goals Database Service', () => {
         })
       );
 
-      // The function returns a string success message
-      expect(typeof result).toBe('string');
-      expect(result).toContain('Epic Quest created');
+      // The function returns an object with message and goalId
+      expect(typeof result).toBe('object');
+      expect(result).toHaveProperty('message');
+      expect(result).toHaveProperty('goalId');
+      expect(result.message).toContain('Epic Quest created');
+      expect(typeof result.goalId).toBe('string');
     });
 
     it('should throw ValidationError for empty title', async () => {

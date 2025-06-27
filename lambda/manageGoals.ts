@@ -6,6 +6,7 @@ import {
   updateGoal,
   deleteGoal,
 } from '../src/services/database/goals';
+import { getMilestonesByEpicId } from '../src/services/database/milestones';
 import {
   createSuccessResponse,
   createErrorResponse,
@@ -53,6 +54,14 @@ export const handler = async (
     // Route by HTTP method and path
     const goalId = event.pathParameters?.goalId;
     const httpMethod = event.requestContext?.http?.method;
+    const rawPath = event.requestContext?.http?.path || '';
+    // New: Check for /goals/{goalId}/milestones
+    if (httpMethod === 'GET' && rawPath.match(/^\/goals\/[\w-]+\/milestones$/)) {
+      if (!goalId) {
+        return createErrorResponse(400, 'Missing goalId in path', requestId);
+      }
+      return await handleGetMilestonesForGoal(userId, goalId, requestId);
+    }
     switch (httpMethod) {
       case 'GET':
         return await handleGetGoals(userId, requestId);
@@ -189,5 +198,33 @@ async function handleDeleteGoal(
       requestId,
     });
     return createErrorResponse(500, 'Failed to delete goal', requestId);
+  }
+}
+
+/**
+ * Handle GET /goals/{goalId}/milestones - Retrieve all milestones for a goal
+ */
+async function handleGetMilestonesForGoal(
+  userId: string,
+  goalId: string,
+  requestId: string
+): Promise<APIGatewayProxyResultV2> {
+  try {
+    Logger.info('Fetching milestones for goal', { userId, goalId, requestId });
+    const milestones = await getMilestonesByEpicId(goalId);
+    const response = {
+      milestones,
+      count: milestones.length,
+    };
+    Logger.info('Milestones retrieved successfully', { userId, goalId, count: milestones.length, requestId });
+    return createSuccessResponse(response);
+  } catch (error) {
+    Logger.error('Failed to fetch milestones', {
+      userId,
+      goalId,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      requestId,
+    });
+    return createErrorResponse(500, 'Failed to retrieve milestones', requestId);
   }
 }
