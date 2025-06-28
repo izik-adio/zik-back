@@ -113,12 +113,27 @@ export class ZikBackendStack extends cdk.Stack {
       sortKey: { name: 'dueDate', type: dynamodb.AttributeType.STRING },
     });
 
-    // Users Table - Simplified structure using userId as PK
+    // Users Table - Enhanced structure with uniqueness indexes
     const usersTable = new dynamodb.Table(this, 'UsersTable', {
       partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
+
+    // Note: GSIs will be added in a separate deployment step to avoid conflicts
+    // Add Global Secondary Index for username uniqueness - Deploy separately
+    // usersTable.addGlobalSecondaryIndex({
+    //   indexName: 'username-index',
+    //   partitionKey: { name: 'username', type: dynamodb.AttributeType.STRING },
+    //   projectionType: dynamodb.ProjectionType.KEYS_ONLY,
+    // });
+
+    // Add Global Secondary Index for email uniqueness - Deploy in second update
+    // usersTable.addGlobalSecondaryIndex({
+    //   indexName: 'email-index',
+    //   partitionKey: { name: 'email', type: dynamodb.AttributeType.STRING },
+    //   projectionType: dynamodb.ProjectionType.KEYS_ONLY,
+    // });
 
     // RecurrenceRules Table - New table
     const recurrenceRulesTable = new dynamodb.Table(
@@ -141,6 +156,8 @@ export class ZikBackendStack extends cdk.Stack {
       sortKey: { name: 'timestamp', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
+      // Enable TTL for automatic cleanup of old messages
+      timeToLiveAttribute: 'ttl',
     });
 
     // Milestones Table - New table for roadmap milestones
@@ -221,6 +238,35 @@ export class ZikBackendStack extends cdk.Stack {
 
     // Grant Cognito permissions for token verification
     userPool.grant(manageGoalsHandler, 'cognito-idp:GetUser');
+
+    // --- Profile Handler Lambda - Handles profile management operations ---
+    const manageProfileHandler = new NodejsFunction(this, 'ManageProfileHandler', {
+      ...commonLambdaProps,
+      entry: path.join(__dirname, '../lambda/manageProfile.ts'),
+      handler: 'handler',
+      environment: {
+        USERS_TABLE_NAME: usersTable.tableName,
+        USER_POOL_ID: userPool.userPoolId,
+        USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
+      },
+    });
+
+    // Grant permissions to the profile handler Lambda
+    usersTable.grantReadWriteData(manageProfileHandler);
+
+    // Grant permissions to query the GSI indexes for username and email uniqueness checks
+    manageProfileHandler.addToRolePolicy(new iam.PolicyStatement({
+      actions: [
+        'dynamodb:Query'
+      ],
+      resources: [
+        `${usersTable.tableArn}/index/username-index`,
+        `${usersTable.tableArn}/index/email-index`
+      ]
+    }));
+
+    // Grant Cognito permissions for token verification
+    userPool.grant(manageProfileHandler, 'cognito-idp:GetUser');
 
     // Create Cognito JWT Authorizer
     const cognitoAuthorizer = new HttpJwtAuthorizer(
@@ -327,6 +373,52 @@ export class ZikBackendStack extends cdk.Stack {
       authorizer: cognitoAuthorizer,
     });
 
+    // --- Profile Management Routes (Protected with Cognito JWT Authorizer) ---
+
+    // GET /profile - Fetch current user's profile
+    httpApi.addRoutes({
+      path: '/profile',
+      methods: [apigatewayv2.HttpMethod.GET],
+      integration: new HttpLambdaIntegration(
+        'GetProfileIntegration',
+        manageProfileHandler
+      ),
+      authorizer: cognitoAuthorizer,
+    });
+
+    // POST /profile - Create/initialize profile
+    httpApi.addRoutes({
+      path: '/profile',
+      methods: [apigatewayv2.HttpMethod.POST],
+      integration: new HttpLambdaIntegration(
+        'CreateProfileIntegration',
+        manageProfileHandler
+      ),
+      authorizer: cognitoAuthorizer,
+    });
+
+    // PUT /profile - Update profile information
+    httpApi.addRoutes({
+      path: '/profile',
+      methods: [apigatewayv2.HttpMethod.PUT],
+      integration: new HttpLambdaIntegration(
+        'UpdateProfileIntegration',
+        manageProfileHandler
+      ),
+      authorizer: cognitoAuthorizer,
+    });
+
+    // PUT /profile/onboarding/complete - Mark onboarding as completed
+    httpApi.addRoutes({
+      path: '/profile/onboarding/complete',
+      methods: [apigatewayv2.HttpMethod.PUT],
+      integration: new HttpLambdaIntegration(
+        'CompleteOnboardingIntegration',
+        manageProfileHandler
+      ),
+      authorizer: cognitoAuthorizer,
+    });
+
     // --- Chat Handler Lambda - Handles AI-powered chat interactions ---
     const chatHandler = new NodejsFunction(this, 'ChatHandler', {
       ...commonLambdaProps,
@@ -375,6 +467,43 @@ export class ZikBackendStack extends cdk.Stack {
       path: '/chat',
       methods: [apigatewayv2.HttpMethod.POST],
       integration: new HttpLambdaIntegration('ChatIntegration', chatHandler),
+      authorizer: cognitoAuthorizer,
+    });
+
+    // --- Chat History Management Lambda - Handles reading and deleting chat history ---
+    const manageChatHistoryHandler = new NodejsFunction(this, 'ManageChatHistoryHandler', {
+      ...commonLambdaProps,
+      entry: path.join(lambdaBaseDir, 'manageChatHistory.ts'),
+      handler: 'handler',
+      environment: {
+        CHAT_MESSAGES_TABLE_NAME: chatMessagesTable.tableName,
+        USERS_TABLE_NAME: usersTable.tableName,
+        GOALS_TABLE_NAME: goalsTable.tableName,
+        TASKS_TABLE_NAME: tasksTable.tableName,
+        USER_POOL_ID: userPool.userPoolId,
+        USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
+      },
+    });
+
+    // Grant permissions to the chat history management Lambda
+    chatMessagesTable.grantReadWriteData(manageChatHistoryHandler);
+    usersTable.grantReadData(manageChatHistoryHandler);
+    goalsTable.grantReadData(manageChatHistoryHandler);
+    tasksTable.grantReadData(manageChatHistoryHandler);
+    userPool.grant(manageChatHistoryHandler, 'cognito-idp:GetUser');
+
+    // Chat history endpoints
+    httpApi.addRoutes({
+      path: '/chat-history',
+      methods: [apigatewayv2.HttpMethod.GET],
+      integration: new HttpLambdaIntegration('GetChatHistoryIntegration', manageChatHistoryHandler),
+      authorizer: cognitoAuthorizer,
+    });
+
+    httpApi.addRoutes({
+      path: '/chat-history',
+      methods: [apigatewayv2.HttpMethod.DELETE],
+      integration: new HttpLambdaIntegration('DeleteChatHistoryIntegration', manageChatHistoryHandler),
       authorizer: cognitoAuthorizer,
     });
 

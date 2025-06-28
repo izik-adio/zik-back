@@ -7,3 +7,7 @@ node_modules
 .cdk.staging
 cdk.out
 dist/
+
+# Authentication tokens
+token.json
+token.txt

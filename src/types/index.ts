@@ -8,16 +8,64 @@
  */
 
 /**
+ * User preferences configuration
+ */
+export interface UserPreferences {
+  theme: 'light' | 'dark' | 'system';
+  notifications: {
+    email: boolean;
+    push: boolean;
+    dailyReminders: boolean;
+    weeklyDigest: boolean;
+  };
+  timezone: string;
+  language: string;
+  questCategories: string[];
+  privacySettings: {
+    shareProgress: boolean;
+    publicProfile: boolean;
+  };
+}
+
+/**
  * User profile information from the Users table
  */
 export interface UserProfile {
   userId: string;
-  email: string;
+  username: string; // Unique username across the platform
+  email: string; // Unique email across the platform
   firstName: string;
   lastName: string;
-  preferences: any;
+  displayName?: string;
+  avatarUrl?: string;
+  preferences: UserPreferences;
+  onboardingCompleted: boolean;
   createdAt: string;
   lastLoginAt?: string;
+  updatedAt: string;
+}
+
+/**
+ * Profile creation request structure
+ */
+export interface CreateProfileRequest {
+  username: string;
+  firstName: string;
+  lastName: string;
+  displayName?: string;
+  preferences?: Partial<UserPreferences>;
+}
+
+/**
+ * Profile update request structure
+ */
+export interface UpdateProfileRequest {
+  username?: string;
+  firstName?: string;
+  lastName?: string;
+  displayName?: string;
+  avatarUrl?: string;
+  preferences?: Partial<UserPreferences>;
 }
 
 /**
@@ -71,6 +119,7 @@ export interface Task {
 
 /**
  * Chat message in conversation history
+ * Note: TTL field is added at runtime for DynamoDB automatic cleanup
  */
 export interface ChatMessage {
   userId: string;

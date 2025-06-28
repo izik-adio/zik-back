@@ -11,7 +11,8 @@
 7. [Environment & Configuration](#environment--configuration)
 8. [Testing](#testing)
 9. [Utilities](#utilities)
-10. [Development & Contribution](#development--contribution)
+10. [Known Issues & Troubleshooting](#known-issues--troubleshooting)
+11. [Development & Contribution](#development--contribution)
 
 ---
 
@@ -24,6 +25,16 @@ The Zik backend is a modern, serverless, event-driven system built on AWS. It po
 - **Just-in-Time Task Generation**: Daily quests created exactly when needed
 - **Intelligent Milestone Progression**: Automatic advancement through goal roadmaps
 - **Conversational AI Interface**: Natural language interaction with Bedrock Claude
+- **Chat History Management**: Persistent conversation storage with cleanup capabilities
+- **User Profile System**: Comprehensive user management with onboarding flow
+
+**Current Status (2025-06-28):**
+- ✅ Core API endpoints fully operational
+- ✅ Chat history management recently fixed and working
+- ✅ Profile management system implemented
+- ⚠️ Chat AI endpoint requires Bedrock model access setup
+- ✅ All database operations and CRUD functionality working
+- ✅ Comprehensive test utilities available
 
 The backend is designed for scalability, maintainability, and testability, using a clean architecture and AWS best practices.
 
@@ -39,8 +50,7 @@ zik-back/
 │   │   │   ├── index.ts
 │   │   │   └── __tests__/
 │   │   │       └── index.test.ts
-│   │   ├── recurringTaskGenerator/
-│   │   │   └── index.ts
+│   │   ├── recurringTaskGenerator.ts # Scheduled task generation
 │   │   ├── roadmapGenerator/     # AI-powered roadmap generation
 │   │   │   └── index.ts
 │   │   ├── milestoneSaver/       # Milestone persistence
@@ -59,30 +69,46 @@ zik-back/
 │   │       ├── goals.ts
 │   │       ├── tasks.ts
 │   │       ├── milestones.ts     # Milestone operations
-│   │       ├── chatMessages.ts
+│   │       ├── chatMessages.ts   # Chat history & context aggregation
+│   │       ├── users.ts          # User profile management
 │   │       ├── recurrenceRules.ts
 │   │       └── __tests__/
 │   ├── utils/                    # Logging, error, and response helpers
 │   ├── types/                    # Shared TypeScript interfaces
 │   └── config.ts                 # Centralized environment config
-├── lambda/                       # Legacy Lambda handlers (for migration/testing)
+├── lambda/                       # Legacy Lambda handlers (API route handlers)
+│   ├── manageChatHistory.ts      # Chat history CRUD operations
+│   ├── manageGoals.ts           # Goal management endpoints
+│   ├── manageProfile.ts         # User profile endpoints
+│   ├── manageQuests.ts          # Task management endpoints
+│   ├── startRoadmapGeneration.ts # Roadmap workflow trigger
+│   ├── chatHistoryCleanup.ts    # Cleanup utilities
+│   └── __tests__/               # Integration tests
 ├── lib/                          # AWS CDK infrastructure code
 ├── bin/                          # CDK app entry point
 ├── test/                         # Integration and E2E tests
 ├── dist/                         # TypeScript build output
 ├── cdk.out/                      # CDK build artifacts
-├── auth-test.js, chat-test.js, token-utils.js, token.json, token.txt # Developer/test utilities (not core)
+├── Developer/Test Utilities:     # Testing and debugging tools
+│   ├── auth-test.js              # Authentication testing
+│   ├── chat-test.js              # Chat endpoint testing
+│   ├── chat-history-test.js      # Chat history testing
+│   ├── profile-test.js           # Profile management testing
+│   ├── debug-api.js              # General API debugging
+│   ├── check-token.js            # JWT validation utility
+│   ├── token.json, token.txt     # Token storage
+│   └── Various debug-*.js files # Specific debugging utilities
 ├── package.json, tsconfig.json, jest.config.js, cdk.json, etc.
 ```
 
-- **src/lambda/**: Modern Lambda orchestrators (chat, recurring tasks)
+- **src/lambda/**: Modern Lambda orchestrators (chat, recurring tasks, AI workflows)
 - **src/services/**: Business logic, database, AI, and tool execution
 - **src/types/**: Shared data models and contracts
 - **src/utils/**: Logging, error, and response helpers
-- **lambda/**: Legacy Lambda handlers (for migration/testing)
+- **lambda/**: API route handlers (goals, tasks, profile, chat history management)
 - **lib/**, **bin/**: AWS CDK infrastructure-as-code
 - **test/**: Integration and E2E tests
-- **auth-test.js**, **chat-test.js**, **token-utils.js**: Developer/test utilities (not part of production system)
+- **Root-level .js files**: Developer/test utilities for manual API testing and debugging
 
 ---
 
@@ -104,7 +130,16 @@ Authorization: Bearer <JWT_ACCESS_TOKEN>
   - Returns: `{ response: <AI response>, requestId, timestamp }`
   - Handles context gathering, AI prompt, tool execution, and chat history.
 
-### 3.2. Epic Quest (Goal) Management
+### 3.2. Chat History Management
+
+- **GET /chat-history**: Retrieve all of user's chat message history (max 10 messages).
+  - No parameters needed - simplified API
+  - Returns: `{ messages: ChatMessage[], count: number, timestamp }`
+- **DELETE /chat-history**: Clear all chat history.
+  - No parameters needed - clears everything
+  - Returns: `{ deletedMessages: number, message: string, timestamp }`
+
+### 3.3. Epic Quest (Goal) Management
 
 - **GET /goals**: List all active goals for the authenticated user.
 - **POST /goals**: Create a new goal. `{ "goalName": "..." }`
@@ -113,10 +148,8 @@ Authorization: Bearer <JWT_ACCESS_TOKEN>
 - **DELETE /goals/{goalId}**: Delete a goal.
 - **GET /goals/{goalId}/milestones**: Get AI-generated milestones for an Epic Quest
   - Returns ordered list of milestones with status: `locked`, `active`, or `completed`
-- **PUT /goals/{goalId}**: Update a goal. `{ ...fields }`
-- **DELETE /goals/{goalId}**: Delete a goal.
 
-### 3.3. Daily Task Management
+### 3.4. Daily Task Management
 
 - **GET /tasks**: List today's tasks (or by date) for the user. Supports optional `date` query param (e.g., `/tasks?date=YYYY-MM-DD`).
   - **Note**: Includes milestone-linked tasks generated by the Coach AI
@@ -125,11 +158,18 @@ Authorization: Bearer <JWT_ACCESS_TOKEN>
   - **Note**: Marking tasks as `completed` triggers automatic milestone progression
 - **DELETE /tasks/{taskId}**: Delete a task.
 
-> **Sample request/response payloads for all endpoints are available in `API-REFRACTORING-NOTES.md`.**
+### 3.5. Profile Management
 
-### 3.4. Recurrence Rules (Proactive Engine)
+- **GET /profile**: Retrieve current user's profile information.
+- **POST /profile**: Create/initialize user profile. `{ firstName, lastName, preferences, ... }`
+- **PUT /profile**: Update profile information. `{ ...fields }`
+- **PUT /profile/onboarding/complete**: Mark user onboarding as completed.
+
+### 3.6. Recurrence Rules (Proactive Engine)
 
 - Managed internally; not exposed as public API. Used by scheduled Lambda to generate daily tasks.
+
+> **Sample request/response payloads for all endpoints are available in `API-REFRACTORING-NOTES.md` and test files.**
 
 ---
 
@@ -145,14 +185,36 @@ All types are defined in `src/types/index.ts`.
 ### UserProfile
 
 ```ts
+interface UserPreferences {
+  theme: 'light' | 'dark' | 'system';
+  notifications: {
+    email: boolean;
+    push: boolean;
+    dailyReminders: boolean;
+    weeklyDigest: boolean;
+  };
+  timezone: string;
+  language: string;
+  questCategories: string[];
+  privacySettings: {
+    shareProgress: boolean;
+    publicProfile: boolean;
+  };
+}
+
 interface UserProfile {
   userId: string;
-  email: string;
+  username: string; // Unique username across the platform
+  email: string; // Unique email across the platform
   firstName: string;
   lastName: string;
-  preferences: any;
+  displayName?: string;
+  avatarUrl?: string;
+  preferences: UserPreferences;
+  onboardingCompleted: boolean;
   createdAt: string;
   lastLoginAt?: string;
+  updatedAt: string;
 }
 ```
 
@@ -289,7 +351,11 @@ The Zik backend uses DynamoDB for all persistent storage. Below are the details 
 - **Table Name:** `USERS_TABLE_NAME`
 - **Partition Key:** `userId` (string)
 - **Billing Mode:** PAY_PER_REQUEST
-- **Description:** Stores user profile information. Each user is uniquely identified by `userId`.
+- **Description:** Stores user profile information with enhanced structure including preferences, onboarding status, and unique constraints.
+- **Global Secondary Indexes:**
+  - **username-index:** Partition Key: `username` (string) - For username uniqueness validation
+  - **email-index:** Partition Key: `email` (string) - For email uniqueness validation
+- **Unique Constraints:** Username and email must be unique across all users
 
 ### Recurrence Rules Table
 
@@ -305,7 +371,8 @@ The Zik backend uses DynamoDB for all persistent storage. Below are the details 
 - **Partition Key:** `userId` (string)
 - **Sort Key:** `timestamp` (string, ISO8601)
 - **Billing Mode:** PAY_PER_REQUEST
-- **Description:** Stores all chat messages for each user, ordered by timestamp.
+- **TTL Attribute:** `ttl` (automatic cleanup after 30 days)
+- **Description:** Stores all chat messages for each user, ordered by timestamp. Includes automatic cleanup via TTL and manual cleanup endpoints.
 
 ---
 
@@ -595,6 +662,11 @@ For more, see the system prompt and tool definitions in `src/services/bedrockSer
 npx cdk deploy --require-approval never
 ```
 
+**Build Command:**
+```bash
+npm run build
+```
+
 ---
 
 ## 8. Testing
@@ -616,14 +688,105 @@ npx cdk deploy --require-approval never
 
 ---
 
-## 10. Development & Contribution
+## 10. Known Issues & Troubleshooting
+
+### 10.1. Chat Endpoint Issues
+
+**Issue**: Chat endpoint returns 503 "AI service temporarily unavailable" errors.
+
+**Root Cause**: AWS account may not have access to the Claude 3 Haiku model in Amazon Bedrock.
+
+**Solution**:
+1. **Enable Model Access in Amazon Bedrock Console**:
+   - Go to AWS Bedrock Console → Model Access
+   - Request access to "Claude 3 Haiku" model (`anthropic.claude-3-haiku-20240307-v1:0`)
+   - Wait for approval (usually instant for Haiku)
+
+2. **Alternative**: Change to a different model that might already be enabled in `src/config.ts`:
+   ```typescript
+   bedrockModelId: 'amazon.titan-text-express-v1',
+   ```
+
+**Status**: ⚠️ **KNOWN ISSUE** - Model access needs to be enabled per AWS account.
+
+### 10.2. Chat History DELETE Fixed
+
+**Issue**: Chat history DELETE endpoint was returning 500 "Database operation failed" errors.
+
+**Root Cause**: JavaScript falsy evaluation bug when `maxMessages` parameter was 0.
+
+**Solution**: Fixed in `src/services/database/chatMessages.ts` - changed condition from `maxMessages || config.maxChatHistoryPerUser` to `maxMessages !== undefined ? maxMessages : config.maxChatHistoryPerUser`.
+
+**Status**: ✅ **RESOLVED** - All DELETE operations now work correctly.
+
+### 10.3. Environment Variables
+
+**Required Variables**: The following environment variables must be set:
+- `USER_POOL_ID`
+- `USER_POOL_CLIENT_ID`
+- All DynamoDB table names (auto-generated by CDK)
+- Step Function ARNs (auto-generated by CDK)
+
+**Validation**: Environment variables are validated on startup in `src/config.ts`.
+
+### 10.4. Token Expiration
+
+**Issue**: JWT tokens expire after 1 hour.
+
+**Solution**: Use the provided auth test utilities:
+```bash
+node auth-test.js signin  # Get fresh token
+```
+
+**Test Files**: `auth-test.js`, `chat-test.js`, `chat-history-test.js` provide testing utilities.
+
+---
+
+## 11. Development & Contribution
 
 - **Build**: `npm run build` (TypeScript)
 - **Watch**: `npm run watch`
 - **Test**: `npm test` (all), `npm run test:unit`, `npm run test:integration`, etc.
-- **Deploy**: `cdk deploy`
+- **Deploy**: `npx cdk deploy --require-approval never`
 - **Environment**: Node.js 18+, AWS credentials, `.env` file
 - **Code Style**: Prettier (`.prettierrc`)
 - **Extensibility**: Add new Lambda handlers in `src/lambda/`, new services in `src/services/`, new types in `src/types/`
 - **Type Safety**: All shared types/interfaces are centralized in `src/types/index.ts` for consistency across the application.
-- **Developer Utilities**: Test scripts and token helpers are in the project root.
+
+### 11.1. Test Files & Utilities
+
+**Development Test Files** (located in project root):
+- `auth-test.js` - Authentication and token management testing
+- `chat-test.js` - Comprehensive chat endpoint testing
+- `chat-history-test.js` - Chat history API testing
+- `profile-test.js` - Profile management testing
+- `debug-api.js` - General API debugging
+- `check-token.js` - JWT token validation utility
+
+**Test Commands**:
+```bash
+# Run specific test suites
+npm run test:unit           # Unit tests
+npm run test:integration    # Integration tests
+npm run test:services       # Service layer tests
+npm run test:utils          # Utility tests
+npm run test:coverage       # Coverage report
+
+# Manual API testing
+node auth-test.js signin    # Get fresh auth token
+node chat-test.js           # Test chat functionality
+node chat-history-test.js   # Test chat history
+```
+
+### 11.2. Recent Updates & Fixes
+
+**2025-06-28**: 
+- ✅ Fixed chat history DELETE endpoint database operation bug
+- ✅ Enhanced error logging for Bedrock service issues
+- ✅ Added comprehensive API endpoint testing utilities
+- ⚠️ Identified Bedrock model access requirements
+
+**Architecture Improvements**:
+- Enhanced error handling with specific AWS service error types
+- Improved logging for debugging complex AI service interactions
+- Better parameter validation for cleanup operations

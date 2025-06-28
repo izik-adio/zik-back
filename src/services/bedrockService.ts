@@ -351,6 +351,12 @@ export async function invokeBedrock(prompt: any): Promise<BedrockResponse> {
 
     // Handle specific Bedrock errors
     if (error instanceof Error) {
+      Logger.error('Bedrock API error details', {
+        errorName: error.name,
+        errorMessage: error.message,
+        errorStack: error.stack,
+      });
+
       if (error.name === 'ThrottlingException') {
         Logger.error('Bedrock throttling detected', error);
         throw new BedrockError(
@@ -360,6 +366,14 @@ export async function invokeBedrock(prompt: any): Promise<BedrockResponse> {
       if (error.name === 'ValidationException') {
         Logger.error('Bedrock validation error', error);
         throw new BedrockError('Invalid request format');
+      }
+      if (error.name === 'AccessDeniedException') {
+        Logger.error('Bedrock access denied - model access may not be enabled', error);
+        throw new BedrockError('AI model access not available');
+      }
+      if (error.name === 'ResourceNotFoundException') {
+        Logger.error('Bedrock model not found', error);
+        throw new BedrockError('AI model not available');
       }
     }
 

@@ -11,7 +11,9 @@ export const config = {
   milestonesTableName: process.env.MILESTONES_TABLE_NAME || '',
 
   // DynamoDB Indexes
-  userIdDueDateIndex: process.env.USER_ID_DUE_DATE_INDEX!,
+  userIdDueDateIndex: process.env.USER_ID_DUE_DATE_INDEX || 'user-due-date-index',
+  usernameIndex: 'username-index',
+  emailIndex: 'email-index',
 
   // Cognito Configuration
   userPoolId: process.env.USER_POOL_ID!,
@@ -28,6 +30,8 @@ export const config = {
   maxMessageLength: 5000,
   maxTitleLength: 200,
   defaultChatHistoryLimit: 10,
+  maxChatHistoryPerUser: 10, // Maximum number of messages to keep per user
+  chatHistoryRetentionDays: 30, // TTL for individual messages (fallback cleanup)
 
   // Step Functions & Lambda ARNs (optional for some Lambda functions)
   roadmapGeneratorWorkflowArn: process.env.ROADMAP_GENERATOR_WORKFLOW_ARN || '',
@@ -41,7 +45,6 @@ export const config = {
 
 // Validate required environment variables on module load
 const requiredEnvVars = [
-  'USER_ID_DUE_DATE_INDEX',
   'USER_POOL_ID',
   'USER_POOL_CLIENT_ID',
 ];

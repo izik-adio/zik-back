@@ -8,6 +8,7 @@ import {
   saveChatMessage,
   getContextForUser,
   fetchChatHistory,
+  cleanupUserChatHistory,
 } from '../chatMessages';
 import { DatabaseError } from '../../../utils/errors';
 
@@ -27,6 +28,8 @@ jest.mock('../../../config', () => ({
     usersTableName: 'test-users-table',
     userIdDueDateIndex: 'userId-dueDate-index',
     defaultChatHistoryLimit: 10,
+    maxChatHistoryPerUser: 10,
+    chatHistoryRetentionDays: 30,
   },
 }));
 
@@ -366,6 +369,60 @@ describe('ChatMessages Database Service', () => {
       await expect(getContextForUser(mockUserId)).rejects.toThrow(
         'Failed to fetch user profile'
       );
+    });
+  });
+
+  describe('cleanupUserChatHistory', () => {
+    it('should delete old messages when exceeding limit', async () => {
+      // Mock initial count query (before cleanup)
+      mockSend.mockResolvedValueOnce({
+        Count: 15, // More than the limit of 10
+      });
+
+      // Mock query for messages to delete (called by cleanupOldChatMessages)
+      const mockMessages = Array.from({ length: 15 }, (_, i) => ({
+        userId: mockUserId,
+        messageId: `msg-${i}`,
+        timestamp: `2025-06-23T09:${String(i).padStart(2, '0')}:00.000Z`,
+      }));
+
+      mockSend.mockResolvedValueOnce({
+        Items: mockMessages,
+      });
+
+      // Mock delete operations (5 messages should be deleted)
+      for (let i = 0; i < 5; i++) {
+        mockSend.mockResolvedValueOnce({}); // Delete command responses
+      }
+
+      // Mock final count query (after cleanup)
+      mockSend.mockResolvedValueOnce({
+        Count: 10, // Should be at the limit
+      });
+
+      const deletedCount = await cleanupUserChatHistory(mockUserId);
+
+      expect(deletedCount).toBe(5); // 15 - 10 = 5 deleted
+      expect(mockSend).toHaveBeenCalledTimes(8); // 2 count queries + 1 message query + 5 deletes
+    });
+
+    it('should return 0 when no cleanup is needed', async () => {
+      // Mock count queries showing we're under the limit
+      mockSend.mockResolvedValueOnce({
+        Count: 5, // Under the limit of 10
+      });
+
+      mockSend.mockResolvedValueOnce({
+        Items: [], // No messages to delete
+      });
+
+      mockSend.mockResolvedValueOnce({
+        Count: 5, // Same count after "cleanup"
+      });
+
+      const deletedCount = await cleanupUserChatHistory(mockUserId);
+
+      expect(deletedCount).toBe(0);
     });
   });
 });

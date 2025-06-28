@@ -20,7 +20,7 @@ export function createResponse(
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Headers':
         'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
-      'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS', // Added GET and others
+      'Access-Control-Allow-Methods': 'POST,OPTIONS',
     },
     body: JSON.stringify(body),
   };
