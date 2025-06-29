@@ -1,13 +1,105 @@
+# Compiled JavaScript files
 *.js
 !jest.config.js
 *.d.ts
-node_modules
 
-# CDK asset staging directory
-.cdk.staging
-cdk.out
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# nyc test coverage
+.nyc_output
+
+# Grunt intermediate storage
+.grunt
+
+# node-waf configuration
+.lock-wscript
+
+# Compiled binary addons 
+build/Release
+
+# Dependency directories
+jspm_packages/
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.test
+.env.backup
+
+# CDK build artifacts
+.cdk.staging/
+cdk.out/
 dist/
 
-# Authentication tokens
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Authentication tokens and credentials
 token.json
 token.txt
+*.pem
+*.key
+*.csr
+*.crt
+
+# Test files (for public repo - keep source but remove actual tests)
+*-test.js
+auth-test.js
+chat-test.js
+chat-history-test.js
+profile-test.js
+check-token.js
+
+# AWS CDK specific
+*.asset
+cdk.context.json
+
+# TypeScript
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log

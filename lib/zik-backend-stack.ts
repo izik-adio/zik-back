@@ -24,10 +24,14 @@ export class ZikBackendStack extends cdk.Stack {
     super(scope, id, props);
 
     // Retrieve the JWT secret from AWS Secrets Manager
+    // Use environment variable for the secret ARN to support different AWS accounts
+    const jwtSecretArn = process.env.JWT_SECRET_ARN || 
+      `arn:aws:secretsmanager:${this.region}:${this.account}:secret:zik/jwtSecret-nz8nmy`;
+    
     const jwtSecret = secretsmanager.Secret.fromSecretCompleteArn(
       this,
       'JwtSecretFromArn',
-      'arn:aws:secretsmanager:us-east-1:468120368975:secret:zik/jwtSecret-nz8nmy'
+      jwtSecretArn
     );
 
     // --- API Gateway Definition (define early if URL is needed by Lambdas) ---
@@ -73,6 +77,122 @@ export class ZikBackendStack extends cdk.Stack {
       },
       accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // For dev; consider RETAIN for prod
+
+      // Custom email verification templates
+      userVerification: {
+        emailSubject: 'Welcome to Zik! Verify your email address',
+        emailBody: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+            <div style="background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+              <div style="text-align: center; margin-bottom: 30px;">
+                <h1 style="color: #333; margin: 0; font-size: 28px;">Welcome to Zik! 🎯</h1>
+              </div>
+              
+              <div style="margin-bottom: 30px;">
+                <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 15px 0;">
+                  Hi there! 👋
+                </p>
+                <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 15px 0;">
+                  Thanks for signing up for Zik! We're excited to help you achieve your goals and organize your tasks.
+                </p>
+                <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 15px 0;">
+                  To complete your account setup, please verify your email address by entering this verification code:
+                </p>
+              </div>
+              
+              <div style="text-align: center; margin: 30px 0;">
+                <div style="background-color: #f8f9fa; border: 2px dashed #007bff; border-radius: 8px; padding: 20px; display: inline-block;">
+                  <span style="font-size: 32px; font-weight: bold, color: #007bff; letter-spacing: 4px; font-family: 'Courier New', monospace;">
+                    {####}
+                  </span>
+                </div>
+              </div>
+              
+              <div style="margin: 30px 0;">
+                <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 15px 0;">
+                  Once verified, you'll be able to:
+                </p>
+                <ul style="color: #555; font-size: 16px; line-height: 1.6; margin: 0; padding-left: 20px;">
+                  <li>Create and manage your goals</li>
+                  <li>Break down goals into actionable tasks</li>
+                  <li>Track your progress with AI assistance</li>
+                  <li>Get personalized recommendations</li>
+                </ul>
+              </div>
+              
+              <div style="border-top: 1px solid #eee; margin-top: 30px; padding-top: 20px;">
+                <p style="color: #888; font-size: 14px; line-height: 1.5; margin: 0;">
+                  If you didn't create an account with Zik, you can safely ignore this email.
+                </p>
+                <p style="color: #888; font-size: 14px; line-height: 1.5; margin: 10px 0 0 0;">
+                  This verification code will expire in 24 hours.
+                </p>
+              </div>
+            </div>
+          </div>
+        `,
+        emailStyle: cognito.VerificationEmailStyle.CODE,
+      },
+
+      // Custom user invitation templates (for admin-created accounts)
+      userInvitation: {
+        emailSubject: 'You\'re invited to join Zik!',
+        emailBody: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+            <div style="background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+              <div style="text-align: center; margin-bottom: 30px;">
+                <h1 style="color: #333; margin: 0; font-size: 28px;">Welcome to Zik! 🎯</h1>
+              </div>
+              
+              <div style="margin-bottom: 30px;">
+                <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 15px 0;">
+                  Hello {username}! 👋
+                </p>
+                <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 15px 0;">
+                  You've been invited to join Zik, your personal goal achievement and task management platform.
+                </p>
+                <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 15px 0;">
+                  Your temporary password is:
+                </p>
+              </div>
+              
+              <div style="text-align: center; margin: 30px 0;">
+                <div style="background-color: #f8f9fa; border: 2px solid #28a745; border-radius: 8px; padding: 20px; display: inline-block;">
+                  <span style="font-size: 18px; font-weight: bold; color: #28a745; font-family: 'Courier New', monospace;">
+                    {####}
+                  </span>
+                </div>
+              </div>
+              
+              <div style="margin: 30px 0;">
+                <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 15px 0;">
+                  Please log in and change your password on your first visit. With Zik, you'll be able to:
+                </p>
+                <ul style="color: #555; font-size: 16px; line-height: 1.6; margin: 0; padding-left: 20px;">
+                  <li>Set and track meaningful goals</li>
+                  <li>Break down complex objectives into manageable tasks</li>
+                  <li>Get AI-powered insights and recommendations</li>
+                  <li>Monitor your progress and celebrate achievements</li>
+                </ul>
+              </div>
+              
+              <div style="border-top: 1px solid #eee; margin-top: 30px; padding-top: 20px;">
+                <p style="color: #888; font-size: 14px; line-height: 1.5; margin: 0;">
+                  This is a secure invitation. If you believe you received this email in error, please contact support.
+                </p>
+              </div>
+            </div>
+          </div>
+        `,
+      },
+
+      // Optional: Configure custom email domain (requires SES setup)
+      // UNCOMMENT THESE LINES AFTER SETTING UP SES:
+      // email: cognito.UserPoolEmail.withSES({
+      //   fromEmail: 'noreply@yourdomain.com',    // Replace with your domain
+      //   fromName: 'Zik Team',
+      //   sesRegion: 'us-east-1', // Should match your SES region
+      // }),
     });
 
     const userPoolClient = new cognito.UserPoolClient(this, 'UserPoolClient', {
