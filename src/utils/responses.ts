@@ -37,7 +37,8 @@ export function createSuccessResponse(
   requestId?: string
 ): APIGatewayProxyResult {
   return createResponse(200, {
-    ...data,
+    success: true,
+    data,
     timestamp: new Date().toISOString(),
     ...(requestId && { requestId }),
   });
@@ -56,6 +57,7 @@ export function createErrorResponse(
   requestId?: string
 ): APIGatewayProxyResult {
   return createResponse(statusCode, {
+    success: false,
     error: message,
     timestamp: new Date().toISOString(),
     ...(requestId && { requestId }),

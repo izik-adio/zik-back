@@ -189,8 +189,14 @@ async function handleCreateProfile(
     }
 
     const { username, firstName, lastName } = requestBody;
-    if (!username || !firstName || !lastName) {
-        return createErrorResponse(400, 'Missing required fields: username, firstName, lastName', requestId);
+    if (!username) {
+        return createErrorResponse(400, 'Username is required', requestId);
+    }
+    if (!firstName) {
+        return createErrorResponse(400, 'First name is required', requestId);
+    }
+    if (!lastName) {
+        return createErrorResponse(400, 'Last name is required', requestId);
     }
 
     // Get email from Cognito token claims
@@ -200,8 +206,11 @@ async function handleCreateProfile(
         email = await getUserEmailFromCognito(accessToken);
     } catch (error) {
         Logger.error('Failed to get email for new user', error, { userId, requestId });
-        return createErrorResponse(401, 'Could not retrieve user email for profile creation', requestId);
+        return createErrorResponse(400, 'Email is required', requestId);
     }
+
+    // Update last login timestamp
+    await updateLastLogin(userId);
 
     const createdProfile = await createUserProfile(userId, email, requestBody);
 
@@ -255,6 +264,9 @@ async function handleUpdateProfile(
         }
     }
 
+    // Update last login timestamp
+    await updateLastLogin(userId);
+
     const updatedProfile = await updateUserProfile(userId, requestBody);
 
     Logger.info('Profile updated successfully', { userId, requestId });
@@ -276,6 +288,9 @@ async function handleCompleteOnboarding(
     requestId: string
 ): Promise<APIGatewayProxyResult> {
     Logger.debug('Handling complete onboarding request', { userId, requestId });
+
+    // Update last login timestamp
+    await updateLastLogin(userId);
 
     await completeOnboarding(userId);
 

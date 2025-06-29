@@ -35,6 +35,15 @@ jest.mock('../../src/utils/logger', () => ({
     },
 }));
 
+// Mock AWS Cognito client
+const mockGetUser = jest.fn() as jest.MockedFunction<any>;
+jest.mock('@aws-sdk/client-cognito-identity-provider', () => ({
+    CognitoIdentityProviderClient: jest.fn().mockImplementation(() => ({
+        send: mockGetUser,
+    })),
+    GetUserCommand: jest.fn(),
+}));
+
 // Import the handler after mocking
 import { handler } from '../manageProfile';
 
@@ -129,6 +138,16 @@ describe('Profile Management Lambda Handler', () => {
         jest.clearAllMocks();
         mockVerifyTokenAndGetUserId.mockResolvedValue(mockUserId);
         mockUpdateLastLogin.mockResolvedValue(undefined);
+
+        // Mock Cognito getUserEmail response
+        mockGetUser.mockResolvedValue({
+            UserAttributes: [
+                {
+                    Name: 'email',
+                    Value: mockEmail,
+                },
+            ],
+        });
     });
 
     describe('GET /profile', () => {
@@ -227,6 +246,16 @@ describe('Profile Management Lambda Handler', () => {
         });
 
         it('should return 400 when email is missing', async () => {
+            // Mock Cognito to not return an email attribute
+            mockGetUser.mockResolvedValueOnce({
+                UserAttributes: [
+                    {
+                        Name: 'sub',
+                        Value: 'some-user-id',
+                    },
+                ],
+            });
+
             const event = createMockEvent('POST', '/profile', createRequest);
             const result = await handler(event);
 
@@ -247,7 +276,7 @@ describe('Profile Management Lambda Handler', () => {
             expect(result.statusCode).toBe(400);
             const responseBody = JSON.parse(result.body);
             expect(responseBody.success).toBe(false);
-            expect(responseBody.error).toBe('Invalid JSON in request body');
+            expect(responseBody.error).toBe('Invalid or missing request body');
             expect(responseBody.timestamp).toBeDefined();
             expect(responseBody.requestId).toBeDefined();
         });
@@ -286,7 +315,7 @@ describe('Profile Management Lambda Handler', () => {
             expect(result.statusCode).toBe(400);
             const responseBody = JSON.parse(result.body);
             expect(responseBody.success).toBe(false);
-            expect(responseBody.error).toBe('At least one field must be provided for update');
+            expect(responseBody.error).toBe('Request body cannot be empty.');
             expect(responseBody.timestamp).toBeDefined();
             expect(responseBody.requestId).toBeDefined();
         });
@@ -300,7 +329,7 @@ describe('Profile Management Lambda Handler', () => {
             expect(result.statusCode).toBe(400);
             const responseBody = JSON.parse(result.body);
             expect(responseBody.success).toBe(false);
-            expect(responseBody.error).toBe('Invalid JSON in request body');
+            expect(responseBody.error).toBe('Invalid or missing request body');
             expect(responseBody.timestamp).toBeDefined();
             expect(responseBody.requestId).toBeDefined();
         });

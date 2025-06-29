@@ -25,9 +25,9 @@ export class ZikBackendStack extends cdk.Stack {
 
     // Retrieve the JWT secret from AWS Secrets Manager
     // Use environment variable for the secret ARN to support different AWS accounts
-    const jwtSecretArn = process.env.JWT_SECRET_ARN || 
+    const jwtSecretArn = process.env.JWT_SECRET_ARN ||
       `arn:aws:secretsmanager:${this.region}:${this.account}:secret:zik/jwtSecret-nz8nmy`;
-    
+
     const jwtSecret = secretsmanager.Secret.fromSecretCompleteArn(
       this,
       'JwtSecretFromArn',
