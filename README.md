@@ -1,330 +1,161 @@
-# 🎯 Zik Backend - AI-Powered Goal Management System
+# 🎯 Zik Backend – AI-Powered Goal Management System
 
 > **🌟 Looking for the Frontend?** Check out the [Zik Frontend Repository](https://github.com/izik-adio/zik-front) for the complete user interface and client-side application.
 
-A modern, serverless backend built on AWS that powers the Zik AI life companion app. Transform your long-term goals into achievable daily actions through intelligent task generation and conversational AI.
+A modern, event-driven backend built entirely on AWS serverless technologies, powering the Zik AI life companion app. Zik transforms ambitious goals into actionable daily tasks through intelligent orchestration, leveraging the best of AWS Lambda, Step Functions, Amazon Bedrock, and more.
 
-![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
-![AWS](https://img.shields.io/badge/AWS-232F3E?style=for-the-badge&logo=amazon-aws&logoColor=white)
-![Node.js](https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white)
-![CDK](https://img.shields.io/badge/AWS_CDK-FF9900?style=for-the-badge&logo=amazon-aws&logoColor=white)
+---
 
-## ✨ Features
+## 🚀 AWS-Powered Serverless Architecture
 
-### 🎮 Epic Quest System
-- **AI-Powered Goal Breakdown**: Transform ambitious goals into structured roadmaps
-- **Smart Milestone Progression**: Automatic advancement through achievement phases
-- **Dynamic Difficulty Adjustment**: Adapts to user progress and capabilities
+Zik is an AI-powered goal management system that transforms long-term ambitions into daily, achievable actions. Built on AWS, Zik leverages Lambda, Step Functions, and Bedrock to break down goals, generate just-in-time tasks, and provide a conversational interface—all with serverless scalability.
 
-### 📅 Just-in-Time Task Generation
-- **Daily Quest Creation**: Tasks generated exactly when needed
-- **Context-Aware Scheduling**: Considers user patterns and preferences
-- **Intelligent Prioritization**: AI-driven task ordering and importance
+### **AWS Lambda**
+AWS Lambda is the compute backbone of Zik, running all business logic as event-driven, stateless functions. Every API request, background process, and AI interaction is handled by Lambda, ensuring automatic scaling and cost efficiency. Lambda’s integration with other AWS services enables rapid development and seamless orchestration.
 
-### 🤖 Conversational AI Interface
-- **Natural Language Processing**: Powered by AWS Bedrock Claude
-- **Context-Aware Responses**: Maintains conversation history and user context
-- **Adaptive Communication**: Learns from user interaction patterns
+### **Amazon Bedrock**
+Amazon Bedrock provides Zik’s conversational AI and intelligent task generation. By invoking Bedrock from Lambda, Zik delivers context-aware, natural language interactions and dynamic goal breakdowns. Bedrock’s managed foundation models ensure high-quality, secure, and scalable AI without infrastructure overhead.
 
-### 👤 Comprehensive User Management
-- **Secure Authentication**: AWS Cognito integration
-- **Profile Management**: Customizable user preferences and settings
-- **Onboarding Flow**: Guided setup for new users
+### **AWS Step Functions**
+AWS Step Functions orchestrate Zik’s complex, long-running workflows—such as multi-step goal planning and asynchronous AI operations. Step Functions coordinate Lambda invocations, manage state, and provide robust error handling, ensuring a non-blocking, reliable user experience even for intensive tasks.
 
-### 📊 Smart Data Management
-- **Chat History Persistence**: Long-term conversation storage
-- **Automatic Cleanup**: Intelligent data retention policies
-- **Real-time Synchronization**: Instant updates across devices
+### **Amazon DynamoDB**
+Amazon DynamoDB is Zik’s primary data store, chosen for its serverless scalability and millisecond latency. All user profiles, chat histories, quests, and tasks are stored in DynamoDB tables, enabling real-time updates and seamless cross-device synchronization.
 
-## 🏗️ Architecture
+### **Amazon API Gateway**
+Amazon API Gateway exposes Zik’s RESTful endpoints, providing secure, scalable, and monitored access to backend functionality. API Gateway integrates directly with Lambda for zero-administration compute, and enforces rate limiting and authentication at the edge.
 
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   API Gateway   │────│   Lambda Functions │────│    DynamoDB     │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-         │                       │                       │
-         │                       │                       │
-    ┌────▼────┐            ┌─────▼──┐              ┌─────▼─────┐
-    │ Cognito │            │Bedrock │              │   SES     │
-    │  Auth   │            │   AI   │              │  Email    │
-    └─────────┘            └────────┘              └───────────┘
-```
+### **Amazon EventBridge**
+Amazon EventBridge enables event-driven automation within Zik. Key application events—such as quest completions or user onboarding—are published to EventBridge, triggering downstream Lambda functions and Step Functions workflows for decoupled, scalable processing.
 
-### Core Components
+### **Amazon Cognito**
+Amazon Cognito manages user authentication and authorization, providing secure, standards-based identity management. Cognito’s integration with API Gateway and Lambda ensures that all endpoints are protected by JWT-based authentication, supporting both anonymous and registered users.
 
-- **Lambda Handlers**: Event-driven serverless functions
-- **DynamoDB**: NoSQL database for scalable data storage
-- **API Gateway**: RESTful API endpoints with rate limiting
-- **AWS Bedrock**: AI/ML services for conversational intelligence
-- **Cognito**: User authentication and authorization
-- **SES**: Email notifications and communications
+### **AWS Cloud Development Kit (CDK)**
+The AWS CDK defines Zik’s entire infrastructure as code, enabling repeatable, version-controlled deployments. CDK synthesizes and deploys all resources—Lambda, API Gateway, DynamoDB, Cognito, Bedrock, and more—ensuring consistency across environments and rapid iteration.
+
+---
+
+### 🗺️ Architecture Diagram
+
+![Zik AWS Serverless Architecture](architecture.png)
+
+*Figure: Zik’s event-driven, serverless architecture on AWS. User actions flow through API Gateway, triggering Lambda functions, Step Functions, and Bedrock-powered AI, with persistent state in DynamoDB and secure access via Cognito.*
+
+---
+
+## ✨ What Zik Does
+
+- **Epic Quest System:** When a user creates a goal, an AWS Step Functions workflow is triggered asynchronously, orchestrating Lambda and Bedrock to generate a personalized roadmap.
+- **Just-in-Time Task Generation:** Daily tasks are created on demand by Lambda functions, using context from DynamoDB and user preferences managed via Cognito.
+- **Conversational AI:** All chat interactions are processed by Lambda, invoking Bedrock for natural language understanding and response, with chat history persisted in DynamoDB.
+- **Comprehensive User Management:** Cognito secures all endpoints, while Lambda and DynamoDB manage user profiles and onboarding flows.
+- **Smart Data Management:** DynamoDB stores all user data, with EventBridge and Lambda automating cleanup and real-time updates.
+
+---
+
+## 🏗️ Core AWS Components
+
+- **Lambda Handlers:** Stateless compute for all business logic and API endpoints.
+- **Step Functions:** Orchestration of multi-step, asynchronous workflows (e.g., goal planning, AI task generation).
+- **Bedrock:** Foundation model-powered AI for chat and intelligent task breakdown.
+- **DynamoDB:** NoSQL storage for user data, chat history, and quests.
+- **API Gateway:** RESTful API with integrated authentication and rate limiting.
+- **EventBridge:** Event-driven automation for decoupled, scalable processing.
+- **Cognito:** Secure, standards-based user authentication and authorization.
+- **CDK:** Infrastructure as code for rapid, repeatable deployments.
+
+---
+
+## 🧩 How It Works
+
+1. **User Authentication:** All API requests are authenticated via Amazon Cognito, ensuring secure access.
+2. **Goal Creation:** When a user sets a new goal, API Gateway triggers a Lambda function, which starts a Step Functions workflow. This workflow coordinates multiple Lambda steps and invokes Bedrock to generate a detailed plan.
+3. **Task Generation:** Each day, Lambda functions generate context-aware tasks, using data from DynamoDB and user preferences from Cognito.
+4. **Conversational AI:** User messages are routed through API Gateway to Lambda, which calls Bedrock for intelligent, context-aware responses. All chat history is stored in DynamoDB.
+5. **Event-Driven Automation:** Key events (e.g., quest completion) are published to EventBridge, triggering additional Lambda functions for notifications, analytics, or cleanup.
+
+---
+
+## 🏆 Why AWS? (Technical Highlights)
+
+- **Scalability:** All compute is serverless (Lambda, Step Functions), scaling automatically with user demand.
+- **Resilience:** Step Functions provide robust error handling and state management for long-running workflows.
+- **Security:** Cognito and API Gateway enforce strong authentication and authorization.
+- **Speed:** DynamoDB delivers single-digit millisecond latency for all data operations.
+- **AI at Scale:** Bedrock enables secure, scalable, and cost-effective AI without infrastructure management.
+- **Observability:** CloudWatch and X-Ray provide end-to-end monitoring and tracing for all components.
+- **Rapid Iteration:** CDK enables infrastructure as code, supporting fast, repeatable deployments.
+
+---
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-- **Node.js** (v18 or later)
+- **Node.js** (v18+)
 - **AWS CLI** configured with appropriate permissions
 - **AWS CDK** installed globally (`npm install -g aws-cdk`)
 
 ### Installation
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/zik-backend.git
-   cd zik-backend
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Configure environment**
-   ```bash
-   # Copy environment template
-   cp .env.example .env
-   
-   # Edit .env with your AWS configuration
-   # Or run the setup script (recommended):
-   
-   # On Windows:
-   scripts\setup-env.bat
-   
-   # On Linux/Mac:
-   chmod +x scripts/setup-env.sh
-   ./scripts/setup-env.sh
-   ```
-
-4. **Build the project**
-   ```bash
-   npm run build
-   ```
-
-5. **Deploy to AWS**
-   ```bash
-   # Bootstrap CDK (first time only)
-   cdk bootstrap
-   
-   # Deploy the stack
-   cdk deploy
-   ```
-
-## 🔧 Development
-
-### Available Scripts
-
-| Command | Description |
-|---------|-------------|
-| `npm run build` | Compile TypeScript code |
-| `npm run watch` | Watch mode for development |
-| `npm test` | Run all tests |
-| `npm run test:unit` | Run unit tests only |
-| `npm run test:integration` | Run integration tests |
-| `npm run test:coverage` | Generate test coverage report |
-| `npm run test:watch` | Run tests in watch mode |
-| `cdk deploy` | Deploy to AWS |
-| `cdk diff` | Compare deployed stack with current state |
-| `cdk destroy` | Remove deployed resources |
-
-### Project Structure
-
-```
-zik-backend/
-├── src/                     # Source code
-│   ├── lambda/             # Lambda function handlers
-│   │   ├── chatHandler/   # Conversational AI endpoints
-│   │   ├── profileHandler/ # User profile management
-│   │   └── questHandler/  # Goal and task management
-│   ├── services/          # Business logic services
-│   ├── models/            # Data models and types
-│   └── utils/             # Shared utilities
-├── lib/                   # CDK infrastructure code
-├── bin/                   # CDK app entry point
-├── lambda/               # Standalone Lambda functions
-└── __tests__/            # Test files
-```
-
-### Environment Variables
-
-Create a `.env` file in the root directory:
-
 ```bash
-# AWS Configuration
-AWS_REGION=us-east-1
-CDK_DEFAULT_ACCOUNT=your-account-id
-CDK_DEFAULT_REGION=us-east-1
-
-# API Configuration
-API_ENDPOINT=your-api-gateway-url
-
-# Cognito Configuration
-USER_POOL_ID=your-user-pool-id
-USER_POOL_CLIENT_ID=your-client-id
-
-# Database Configuration
-CHAT_HISTORY_TABLE=your-chat-table
-PROFILE_TABLE=your-profile-table
-QUEST_TABLE=your-quest-table
+git clone https://github.com/yourusername/zik-backend.git
+cd zik-backend
+npm install
+cp .env.example .env
+# Edit .env with your AWS configuration or run the setup script:
+scripts\setup-env.bat   # Windows
+# or
+chmod +x scripts/setup-env.sh
+./scripts/setup-env.sh  # Linux/Mac
+npm run build
+cdk bootstrap
+cdk deploy
 ```
+
+---
 
 ## 🧪 Testing
 
-### Running Tests
+All tests are run via Lambda-powered handlers, with data mocked in DynamoDB and workflows simulated using Step Functions local.
 
 ```bash
-# Run all tests
 npm test
-
-# Run with coverage
 npm run test:coverage
-
-# Run specific test suites
-npm run test:unit          # Unit tests
-npm run test:integration   # Integration tests
-npm run test:services      # Service layer tests
+npm run test:unit
+npm run test:integration
 ```
 
-### Test Structure
+---
 
-- **Unit Tests**: Test individual functions and components
-- **Integration Tests**: Test API endpoints and service interactions
-- **Infrastructure Tests**: Validate CDK stack configuration
+## 🛠️ Challenges & AWS Solutions
 
-## 📖 API Documentation
+- **Long-Running AI Workflows:** Zik leverages AWS Step Functions to orchestrate multi-step, asynchronous AI planning, ensuring a responsive user experience even for complex tasks.
+- **Scalable, Real-Time Data:** DynamoDB and EventBridge enable real-time updates and event-driven automation, supporting thousands of concurrent users without bottlenecks.
+- **Secure, Seamless Authentication:** Cognito and API Gateway provide robust, standards-based security with minimal operational overhead.
+- **AI Integration:** By invoking Bedrock from Lambda, Zik delivers scalable, secure, and cost-effective AI, with no infrastructure to manage.
 
-### Authentication
-
-All API endpoints require authentication via AWS Cognito JWT tokens.
-
-```bash
-# Include Authorization header in requests
-Authorization: Bearer <jwt-token>
-```
-
-### Core Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/chat` | POST | Send message to conversational AI |
-| `/profile` | GET/PUT | User profile management |
-| `/quests` | GET/POST | Epic quest management |
-| `/tasks` | GET/POST/PATCH | Daily task operations |
-| `/chat-history` | GET/DELETE | Chat history management |
-
-For detailed API documentation, see [DOCUMENTATION.md](./DOCUMENTATION.md).
-
-## 🔧 Configuration
-
-### AWS Permissions
-
-The deployment requires the following AWS permissions:
-
-- **Lambda**: Function creation and execution
-- **DynamoDB**: Table creation and data operations
-- **API Gateway**: API creation and management
-- **Cognito**: User pool management
-- **Bedrock**: AI model access
-- **CloudFormation**: Stack management
-- **IAM**: Role and policy management
-
-### Rate Limiting
-
-Default rate limits are configured for production use:
-
-- **Burst Limit**: 100 requests
-- **Rate Limit**: 50 requests per second
-- **Per-user Limits**: Configurable based on subscription tier
-
-## 🚀 Deployment
-
-### Production Deployment
-
-1. **Configure AWS credentials**
-   ```bash
-   aws configure
-   ```
-
-2. **Set environment variables**
-   ```bash
-   export CDK_DEFAULT_ACCOUNT=your-account-id
-   export CDK_DEFAULT_REGION=your-preferred-region
-   ```
-
-3. **Deploy the stack**
-   ```bash
-   cdk deploy --require-approval never
-   ```
-
-### Monitoring and Logging
-
-- **CloudWatch Logs**: All Lambda functions log to CloudWatch
-- **X-Ray Tracing**: Distributed tracing enabled for debugging
-- **CloudWatch Metrics**: Custom metrics for business logic
-- **Alarms**: Automated alerts for error rates and performance
+---
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
+We welcome contributions! Please see our Contributing Guidelines for details.
 
-### Development Workflow
-
-1. **Fork the repository**
-2. **Create a feature branch**
-   ```bash
-   git checkout -b feature/amazing-feature
-   ```
-3. **Make your changes**
-4. **Add tests** for new functionality
-5. **Ensure tests pass**
-   ```bash
-   npm test
-   ```
-6. **Commit your changes**
-   ```bash
-   git commit -m 'Add amazing feature'
-   ```
-7. **Push to your branch**
-   ```bash
-   git push origin feature/amazing-feature
-   ```
-8. **Open a Pull Request**
-
-### Code Style
-
-- **TypeScript**: Strict mode enabled
-- **ESLint**: Configured for best practices
-- **Prettier**: Automated code formatting
-- **Jest**: Testing framework with comprehensive coverage
+---
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🆘 Support
-
-- **Documentation**: Check [DOCUMENTATION.md](./DOCUMENTATION.md) for detailed technical docs
-- **Issues**: Report bugs and request features via GitHub Issues
-- **Discussions**: Join community discussions for questions and ideas
-
-## 📊 Status
-
-- ✅ **Core API**: Fully operational
-- ✅ **Chat System**: Recently updated and working
-- ✅ **User Management**: Complete profile system
-- ✅ **Database Operations**: All CRUD functionality working
-- ✅ **Test Coverage**: Comprehensive test utilities
-- 🔄 **Performance Optimization**: Ongoing improvements
-- 🔄 **Documentation**: Continuous updates
+This project is licensed under the MIT License – see the LICENSE file for details.
 
 ---
 
 <div align="center">
-  <p>Built with ❤️ for ambitious goal achievers</p>
+  <p>Built with ❤️ and AWS for ambitious goal achievers</p>
   <p>
-    <a href="#-features">Features</a> •
+    <a href="#aws-powered-serverless-architecture">AWS Architecture</a> •
+    <a href="#-what-zik-does">Features</a> •
     <a href="#-quick-start">Quick Start</a> •
-    <a href="#-api-documentation">API Docs</a> •
     <a href="#-contributing">Contributing</a>
   </p>
 </div>
