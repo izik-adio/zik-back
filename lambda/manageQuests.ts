@@ -145,15 +145,22 @@ async function handleCreateTask(
 ): Promise<APIGatewayProxyResultV2> {
   try {
     const body = event.body ? JSON.parse(event.body) : {};
-    const { title, dueDate, epicId } = body;
+    const { title, dueDate, epicId, description } = body;
     if (!title) {
       return createErrorResponse(400, 'Title is required', requestId);
     }
-    const result = await createTask(userId, title, dueDate, epicId);
+    const result = await createTask(
+      userId,
+      title,
+      dueDate,
+      epicId,
+      description
+    );
     Logger.info('Task created successfully', {
       userId,
       title,
       dueDate,
+      hasDescription: !!description,
       requestId,
     });
     return createSuccessResponse({ message: result }, requestId);
@@ -243,7 +250,11 @@ async function checkAndUpdateMilestoneCompletion(
     const { milestoneId, goalId } = task;
 
     if (!goalId) {
-      Logger.warn('Task has milestoneId but no goalId', { taskId, milestoneId, requestId });
+      Logger.warn('Task has milestoneId but no goalId', {
+        taskId,
+        milestoneId,
+        requestId,
+      });
       return;
     }
 
@@ -251,8 +262,8 @@ async function checkAndUpdateMilestoneCompletion(
     const milestoneTasks = await fetchTasksByMilestone(userId, milestoneId);
 
     // Check if all tasks for this milestone are completed
-    const pendingTasks = milestoneTasks.filter(task =>
-      task.status === 'pending' || task.status === 'in-progress'
+    const pendingTasks = milestoneTasks.filter(
+      (task) => task.status === 'pending' || task.status === 'in-progress'
     );
 
     if (pendingTasks.length === 0) {
@@ -266,25 +277,42 @@ async function checkAndUpdateMilestoneCompletion(
 
       // Get all milestones for this epic to find the current sequence
       const milestones = await getMilestonesByEpicId(goalId);
-      const currentMilestone = milestones.find(m => m.milestoneId === milestoneId);
+      const currentMilestone = milestones.find(
+        (m) => m.milestoneId === milestoneId
+      );
 
       if (!currentMilestone) {
-        Logger.error('Could not find current milestone', { milestoneId, goalId, requestId });
+        Logger.error('Could not find current milestone', {
+          milestoneId,
+          goalId,
+          requestId,
+        });
         return;
       }
 
       // Mark current milestone as completed
-      await updateMilestone(goalId, currentMilestone.sequence, { status: 'completed' });
+      await updateMilestone(goalId, currentMilestone.sequence, {
+        status: 'completed',
+      });
 
       // Find and activate the next milestone
-      const nextMilestone = await getNextMilestone(goalId, currentMilestone.sequence);
+      const nextMilestone = await getNextMilestone(
+        goalId,
+        currentMilestone.sequence
+      );
 
       if (nextMilestone) {
         // Activate the next milestone
-        await updateMilestone(goalId, nextMilestone.sequence, { status: 'active' });
+        await updateMilestone(goalId, nextMilestone.sequence, {
+          status: 'active',
+        });
 
         // Generate daily quests for the next milestone
-        await generateDailyQuestsForMilestone(goalId, nextMilestone.sequence, userId);
+        await generateDailyQuestsForMilestone(
+          goalId,
+          nextMilestone.sequence,
+          userId
+        );
 
         Logger.info('Next milestone activated and quests generated', {
           userId,

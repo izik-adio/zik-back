@@ -18,76 +18,81 @@ const bedrockClient = new BedrockRuntimeClient({
 // Tool definitions for Claude 3 Haiku - using proper Anthropic format
 const GET_QUESTS_TOOL = {
   name: 'get_quests',
-  description: 'Retrieves a list of user quests (daily tasks or epic goals). Use this to answer questions about existing quests, their status, or details.',
+  description:
+    'Retrieves a list of user quests (daily tasks or epic goals). Use this to answer questions about existing quests, their status, or details.',
   input_schema: {
     type: 'object',
     properties: {
       questType: {
         type: 'string',
         enum: ['epic', 'daily'],
-        description: 'Type of quests to retrieve: "epic" for goals/long-term pursuits, "daily" for tasks/today\'s work'
+        description:
+          'Type of quests to retrieve: "epic" for goals/long-term pursuits, "daily" for tasks/today\'s work',
       },
       questId: {
         type: 'string',
-        description: 'ID of a specific quest to fetch'
+        description: 'ID of a specific quest to fetch',
       },
       epicId: {
         type: 'string',
-        description: 'ID of parent Epic Quest to fetch its daily quests'
+        description: 'ID of parent Epic Quest to fetch its daily quests',
       },
       dueDate: {
         type: 'string',
-        description: 'Filter daily quests by date (YYYY-MM-DD format)'
+        description: 'Filter daily quests by date (YYYY-MM-DD format)',
       },
       status: {
         type: 'string',
         enum: ['pending', 'in-progress', 'completed', 'active', 'paused'],
-        description: 'Filter quests by status'
-      }
+        description: 'Filter quests by status',
+      },
     },
-    required: ['questType']
-  }
+    required: ['questType'],
+  },
 };
 
 const MODIFY_QUEST_TOOL = {
   name: 'modify_quest',
-  description: 'Creates, updates, or deletes user quests (goals or tasks). Use when user wants to add, change, remove, complete, or schedule something.',
+  description:
+    'Creates, updates, or deletes user quests (goals or tasks). Use when user wants to add, change, remove, complete, or schedule something.',
   input_schema: {
     type: 'object',
     properties: {
       operation: {
         type: 'string',
         enum: ['create', 'update', 'delete'],
-        description: 'Action to perform'
+        description: 'Action to perform',
       },
       questType: {
         type: 'string',
         enum: ['epic', 'daily'],
-        description: 'Type of quest: "epic" for goals, "daily" for tasks'
+        description: 'Type of quest: "epic" for goals, "daily" for tasks',
       },
       title: {
         type: 'string',
-        description: 'Title of the quest (required for create operations)'
+        description: 'Title of the quest (required for create operations)',
       },
       questId: {
         type: 'string',
-        description: 'ID of quest to update/delete (required for update/delete)'
+        description:
+          'ID of quest to update/delete (required for update/delete)',
       },
       epicId: {
         type: 'string',
-        description: 'ID of parent Epic Quest for daily quests'
+        description: 'ID of parent Epic Quest for daily quests',
       },
       dueDate: {
         type: 'string',
-        description: 'Date for daily quest (YYYY-MM-DD format)'
+        description: 'Date for daily quest (YYYY-MM-DD format)',
       },
       updateFields: {
         type: 'object',
-        description: 'Fields to update (object with key-value pairs)'
-      }
+        description:
+          'Fields to update (object with key-value pairs). For task creation, can include: description, priority',
+      },
     },
-    required: ['operation', 'questType']
-  }
+    required: ['operation', 'questType'],
+  },
 };
 
 // Combine them into a single list for the prompt
@@ -129,7 +134,7 @@ When someone says "Help me create a task..." or "Help me create a goal..." - you
 
 **The Key Difference:**
 - "I want to learn guitar" = SPECIFIC → Use modify_quest immediately
-- "Help me create a goal to learn guitar" = SPECIFIC → Use modify_quest immediately  
+- "Help me create a goal to learn guitar" = SPECIFIC → Use modify_quest immediately
 - "I want to set a new goal" = VAGUE → Ask "What goal?" first
 - "Help me create a task" = VAGUE → Ask "What task?" first
 </natural_helpfulness>
@@ -152,7 +157,7 @@ Here's how you naturally approach helping people:
 
 **For Task and Progress Management:**
 - Creating goals → You use modify_quest with operation="create", questType="epic"
-- Creating tasks → You use modify_quest with operation="create", questType="daily"  
+- Creating tasks → You use modify_quest with operation="create", questType="daily"
 - Checking goals → You use get_quests with questType="epic"
 - Checking daily work → You use get_quests with questType="daily"
 - Updates and completions → You use modify_quest with operation="update"
@@ -221,7 +226,7 @@ You balance being action-oriented with being thoughtful. You never create vague 
 **Action-First Approach:**
 - Say what you're doing briefly, then immediately call the function
 - "Creating that guitar goal! 🎸" → call modify_quest
-- "Let me see... 👀" → call get_quests  
+- "Let me see... 👀" → call get_quests
 - "Adding that task! ✅" → call modify_quest
 - Don't promise actions you won't take
 </response_personality>
@@ -291,7 +296,7 @@ You balance being action-oriented with being thoughtful. You never create vague 
     toolCount: ZIK_TOOLS.length,
     userInput: userInput.substring(0, 100) + '...',
     systemPromptLength: newSystemPrompt.length,
-    tools: ZIK_TOOLS.map(t => t.name),
+    tools: ZIK_TOOLS.map((t) => t.name),
   });
 
   return promptPayload;
@@ -326,7 +331,7 @@ export async function invokeBedrock(prompt: any): Promise<BedrockResponse> {
     Logger.info('Invoking Amazon Bedrock', {
       model: 'claude-3-haiku',
       hasTools: prompt.body ? JSON.parse(prompt.body).tools?.length > 0 : false,
-      toolCount: prompt.body ? JSON.parse(prompt.body).tools?.length : 0
+      toolCount: prompt.body ? JSON.parse(prompt.body).tools?.length : 0,
     });
 
     const command = new InvokeModelWithResponseStreamCommand(prompt);
@@ -353,7 +358,7 @@ export async function invokeBedrock(prompt: any): Promise<BedrockResponse> {
           type: chunkData.type,
           hasContentBlock: !!chunkData.content_block,
           contentBlockType: chunkData.content_block?.type,
-          deltaType: chunkData.delta?.type
+          deltaType: chunkData.delta?.type,
         });
 
         // Handle content blocks
@@ -420,7 +425,10 @@ export async function invokeBedrock(prompt: any): Promise<BedrockResponse> {
       responseLength: sanitizedResponse.length,
       toolCallCount: toolCalls.length,
       messageComplete,
-      toolCalls: toolCalls.map(tc => ({ tool: tc.tool, operation: tc.input?.operation })),
+      toolCalls: toolCalls.map((tc) => ({
+        tool: tc.tool,
+        operation: tc.input?.operation,
+      })),
     });
 
     return { response: sanitizedResponse, toolCalls };
@@ -448,7 +456,10 @@ export async function invokeBedrock(prompt: any): Promise<BedrockResponse> {
         throw new BedrockError('Invalid request format');
       }
       if (error.name === 'AccessDeniedException') {
-        Logger.error('Bedrock access denied - model access may not be enabled', error);
+        Logger.error(
+          'Bedrock access denied - model access may not be enabled',
+          error
+        );
         throw new BedrockError('AI model access not available');
       }
       if (error.name === 'ResourceNotFoundException') {

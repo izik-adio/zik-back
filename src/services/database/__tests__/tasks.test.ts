@@ -133,7 +133,9 @@ describe('Tasks Database Service', () => {
       const result = await createTask(
         mockUserId,
         taskData.title,
-        taskData.dueDate
+        taskData.dueDate,
+        undefined, // epicId
+        'Test task description' // description
       );
 
       expect(mockSend).toHaveBeenCalledWith(
@@ -165,7 +167,8 @@ describe('Tasks Database Service', () => {
         mockUserId,
         'Linked Task',
         '2025-06-25',
-        epicId
+        epicId,
+        'Task with epic ID'
       );
 
       expect(mockSend).toHaveBeenCalledWith(
@@ -182,12 +185,71 @@ describe('Tasks Database Service', () => {
       expect(result).toContain('Daily Quest created');
     });
 
+    it('should create task with description', async () => {
+      mockSend.mockResolvedValueOnce({});
+
+      const result = await createTask(
+        mockUserId,
+        'Task with Description',
+        '2025-06-25',
+        undefined,
+        'This is a detailed description'
+      );
+
+      expect(mockSend).toHaveBeenCalledWith(
+        expect.objectContaining({
+          input: {
+            TableName: 'test-tasks-table',
+            Item: expect.objectContaining({
+              taskName: 'Task with Description',
+              description: 'This is a detailed description',
+            }),
+          },
+        })
+      );
+      expect(result).toContain('Daily Quest created');
+    });
+
+    it('should create task without description when not provided', async () => {
+      mockSend.mockResolvedValueOnce({});
+
+      const result = await createTask(
+        mockUserId,
+        'Task without Description',
+        '2025-06-25'
+      );
+
+      expect(mockSend).toHaveBeenCalledWith(
+        expect.objectContaining({
+          input: {
+            TableName: 'test-tasks-table',
+            Item: expect.not.objectContaining({
+              description: expect.anything(),
+            }),
+          },
+        })
+      );
+      expect(result).toContain('Daily Quest created');
+    });
+
     it('should throw ValidationError for invalid date format', async () => {
       await expect(
-        createTask(mockUserId, 'Test Task', 'invalid-date')
+        createTask(
+          mockUserId,
+          'Test Task',
+          'invalid-date',
+          undefined,
+          undefined
+        )
       ).rejects.toThrow(ValidationError);
       await expect(
-        createTask(mockUserId, 'Test Task', 'invalid-date')
+        createTask(
+          mockUserId,
+          'Test Task',
+          'invalid-date',
+          undefined,
+          undefined
+        )
       ).rejects.toThrow('Due date must be in YYYY-MM-DD format');
     });
 
@@ -196,7 +258,7 @@ describe('Tasks Database Service', () => {
       mockSend.mockRejectedValueOnce(dynamoError);
 
       await expect(
-        createTask(mockUserId, 'Test Task', '2025-06-25')
+        createTask(mockUserId, 'Test Task', '2025-06-25', undefined, undefined)
       ).rejects.toThrow(DatabaseError);
     });
   });

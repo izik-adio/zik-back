@@ -78,6 +78,7 @@ export async function fetchTodayTasks(userId: string): Promise<Task[]> {
  * @param title - The task title
  * @param dueDate - Optional due date
  * @param epicId - Optional linked goal ID
+ * @param description - Optional task description
  * @returns Promise<string> - Success confirmation message
  * @throws ValidationError - If input validation fails
  * @throws DatabaseError - If database operation fails
@@ -86,7 +87,8 @@ export async function createTask(
   userId: string,
   title: string,
   dueDate?: string,
-  epicId?: string
+  epicId?: string,
+  description?: string
 ): Promise<string> {
   // Validate required fields
   if (!title || title.trim().length === 0) {
@@ -119,6 +121,11 @@ export async function createTask(
       createdAt: now,
       updatedAt: now,
     };
+
+    // Add description if provided
+    if (description && description.trim().length > 0) {
+      task.description = description.trim();
+    }
 
     // Validate and link to epic if provided
     if (epicId) {
@@ -367,7 +374,9 @@ export async function createTasksBatch(
     }
 
     if (!task.dueDate || !isValidDateFormat(task.dueDate)) {
-      throw new ValidationError('Valid due date in YYYY-MM-DD format is required');
+      throw new ValidationError(
+        'Valid due date in YYYY-MM-DD format is required'
+      );
     }
 
     return {
@@ -460,7 +469,10 @@ export async function fetchTasksByMilestone(
  * @returns Promise<Task | null> - The task or null if not found
  * @throws DatabaseError - If database operation fails
  */
-export async function getTaskById(userId: string, taskId: string): Promise<Task | null> {
+export async function getTaskById(
+  userId: string,
+  taskId: string
+): Promise<Task | null> {
   try {
     Logger.debug('Fetching task by ID', { userId, taskId });
 

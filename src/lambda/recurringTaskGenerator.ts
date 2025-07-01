@@ -78,7 +78,8 @@ export const handler: Handler = async (event, context) => {
             rule.userId,
             rule.title,
             todayDateString,
-            rule.goalId // This might be undefined, which is fine
+            rule.goalId, // This might be undefined, which is fine
+            rule.description // Pass description from recurrence rule
           );
 
           tasksCreated++;

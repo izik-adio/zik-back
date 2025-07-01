@@ -282,7 +282,11 @@ async function createQuest(
     if (!title) {
       throw new ValidationError('Title is required for creating a daily quest');
     }
-    return await createTask(userId, title, dueDate, epicId);
+
+    // Extract description from updateFields if provided
+    const description = toolInput.updateFields?.description;
+
+    return await createTask(userId, title, dueDate, epicId, description);
   } else if (questType === 'recurrence') {
     if (!title || !frequency) {
       throw new ValidationError(
@@ -377,7 +381,10 @@ async function deleteQuest(
  * @param userId - The authenticated user's ID
  * @param taskId - The ID of the completed task
  */
-async function checkMilestoneCompletion(userId: string, taskId: string): Promise<void> {
+async function checkMilestoneCompletion(
+  userId: string,
+  taskId: string
+): Promise<void> {
   try {
     // First, get the task to find its milestoneId
     const completedTask = await getTaskById(userId, taskId);
@@ -390,7 +397,10 @@ async function checkMilestoneCompletion(userId: string, taskId: string): Promise
     const { milestoneId, goalId } = completedTask;
 
     if (!goalId) {
-      Logger.warn('Task has milestoneId but no goalId', { taskId, milestoneId });
+      Logger.warn('Task has milestoneId but no goalId', {
+        taskId,
+        milestoneId,
+      });
       return;
     }
 
@@ -398,8 +408,8 @@ async function checkMilestoneCompletion(userId: string, taskId: string): Promise
     const milestoneTasks = await fetchTasksByMilestone(userId, milestoneId);
 
     // Check if all tasks for this milestone are completed
-    const pendingTasks = milestoneTasks.filter(task =>
-      task.status === 'pending' || task.status === 'in-progress'
+    const pendingTasks = milestoneTasks.filter(
+      (task) => task.status === 'pending' || task.status === 'in-progress'
     );
 
     if (pendingTasks.length === 0) {
@@ -412,25 +422,41 @@ async function checkMilestoneCompletion(userId: string, taskId: string): Promise
 
       // Get all milestones for this epic to find the current sequence
       const milestones = await getMilestonesByEpicId(goalId);
-      const currentMilestone = milestones.find(m => m.milestoneId === milestoneId);
+      const currentMilestone = milestones.find(
+        (m) => m.milestoneId === milestoneId
+      );
 
       if (!currentMilestone) {
-        Logger.error('Could not find current milestone', { milestoneId, goalId });
+        Logger.error('Could not find current milestone', {
+          milestoneId,
+          goalId,
+        });
         return;
       }
 
       // Mark current milestone as completed
-      await updateMilestone(goalId, currentMilestone.sequence, { status: 'completed' });
+      await updateMilestone(goalId, currentMilestone.sequence, {
+        status: 'completed',
+      });
 
       // Find and activate the next milestone
-      const nextMilestone = await getNextMilestone(goalId, currentMilestone.sequence);
+      const nextMilestone = await getNextMilestone(
+        goalId,
+        currentMilestone.sequence
+      );
 
       if (nextMilestone) {
         // Activate the next milestone
-        await updateMilestone(goalId, nextMilestone.sequence, { status: 'active' });
+        await updateMilestone(goalId, nextMilestone.sequence, {
+          status: 'active',
+        });
 
         // Generate daily quests for the next milestone
-        await generateDailyQuestsForMilestone(goalId, nextMilestone.sequence, userId);
+        await generateDailyQuestsForMilestone(
+          goalId,
+          nextMilestone.sequence,
+          userId
+        );
 
         Logger.info('Next milestone activated and quests generated', {
           userId,
