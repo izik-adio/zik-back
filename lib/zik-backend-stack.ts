@@ -25,7 +25,8 @@ export class ZikBackendStack extends cdk.Stack {
 
     // Retrieve the JWT secret from AWS Secrets Manager
     // Use environment variable for the secret ARN to support different AWS accounts
-    const jwtSecretArn = process.env.JWT_SECRET_ARN ||
+    const jwtSecretArn =
+      process.env.JWT_SECRET_ARN ||
       `arn:aws:secretsmanager:${this.region}:${this.account}:secret:zik/jwtSecret-nz8nmy`;
 
     const jwtSecret = secretsmanager.Secret.fromSecretCompleteArn(
@@ -53,9 +54,7 @@ export class ZikBackendStack extends cdk.Stack {
         allowOrigins: ['*'], // Be more specific in production
       },
       // Consider adding default authorizer if most routes are protected
-    });
-
-    // --- Cognito User Pool and Client (define early) ---
+    }); // --- Cognito User Pool and Client (define early) ---
     const userPool = new cognito.UserPool(this, 'ZikUserPool', {
       userPoolName: 'zik-user-pool',
       selfSignUpEnabled: true, // Set to true if you want users to sign up themselves
@@ -87,7 +86,7 @@ export class ZikBackendStack extends cdk.Stack {
               <div style="text-align: center; margin-bottom: 30px;">
                 <h1 style="color: #333; margin: 0; font-size: 28px;">Welcome to Zik! 🎯</h1>
               </div>
-              
+
               <div style="margin-bottom: 30px;">
                 <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 15px 0;">
                   Hi there! 👋
@@ -99,7 +98,7 @@ export class ZikBackendStack extends cdk.Stack {
                   To complete your account setup, please verify your email address by entering this verification code:
                 </p>
               </div>
-              
+
               <div style="text-align: center; margin: 30px 0;">
                 <div style="background-color: #f8f9fa; border: 2px dashed #007bff; border-radius: 8px; padding: 20px; display: inline-block;">
                   <span style="font-size: 32px; font-weight: bold, color: #007bff; letter-spacing: 4px; font-family: 'Courier New', monospace;">
@@ -107,7 +106,7 @@ export class ZikBackendStack extends cdk.Stack {
                   </span>
                 </div>
               </div>
-              
+
               <div style="margin: 30px 0;">
                 <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 15px 0;">
                   Once verified, you'll be able to:
@@ -119,7 +118,7 @@ export class ZikBackendStack extends cdk.Stack {
                   <li>Get personalized recommendations</li>
                 </ul>
               </div>
-              
+
               <div style="border-top: 1px solid #eee; margin-top: 30px; padding-top: 20px;">
                 <p style="color: #888; font-size: 14px; line-height: 1.5; margin: 0;">
                   If you didn't create an account with Zik, you can safely ignore this email.
@@ -136,14 +135,14 @@ export class ZikBackendStack extends cdk.Stack {
 
       // Custom user invitation templates (for admin-created accounts)
       userInvitation: {
-        emailSubject: 'You\'re invited to join Zik!',
+        emailSubject: "You're invited to join Zik!",
         emailBody: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
             <div style="background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
               <div style="text-align: center; margin-bottom: 30px;">
                 <h1 style="color: #333; margin: 0; font-size: 28px;">Welcome to Zik! 🎯</h1>
               </div>
-              
+
               <div style="margin-bottom: 30px;">
                 <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 15px 0;">
                   Hello {username}! 👋
@@ -155,7 +154,7 @@ export class ZikBackendStack extends cdk.Stack {
                   Your temporary password is:
                 </p>
               </div>
-              
+
               <div style="text-align: center; margin: 30px 0;">
                 <div style="background-color: #f8f9fa; border: 2px solid #28a745; border-radius: 8px; padding: 20px; display: inline-block;">
                   <span style="font-size: 18px; font-weight: bold; color: #28a745; font-family: 'Courier New', monospace;">
@@ -163,7 +162,7 @@ export class ZikBackendStack extends cdk.Stack {
                   </span>
                 </div>
               </div>
-              
+
               <div style="margin: 30px 0;">
                 <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 15px 0;">
                   Please log in and change your password on your first visit. With Zik, you'll be able to:
@@ -175,7 +174,7 @@ export class ZikBackendStack extends cdk.Stack {
                   <li>Monitor your progress and celebrate achievements</li>
                 </ul>
               </div>
-              
+
               <div style="border-top: 1px solid #eee; margin-top: 30px; padding-top: 20px;">
                 <p style="color: #888; font-size: 14px; line-height: 1.5; margin: 0;">
                   This is a secure invitation. If you believe you received this email in error, please contact support.
@@ -360,33 +359,90 @@ export class ZikBackendStack extends cdk.Stack {
     userPool.grant(manageGoalsHandler, 'cognito-idp:GetUser');
 
     // --- Profile Handler Lambda - Handles profile management operations ---
-    const manageProfileHandler = new NodejsFunction(this, 'ManageProfileHandler', {
-      ...commonLambdaProps,
-      entry: path.join(__dirname, '../lambda/manageProfile.ts'),
-      handler: 'handler',
-      environment: {
-        USERS_TABLE_NAME: usersTable.tableName,
-        USER_POOL_ID: userPool.userPoolId,
-        USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
-      },
-    });
+    const manageProfileHandler = new NodejsFunction(
+      this,
+      'ManageProfileHandler',
+      {
+        ...commonLambdaProps,
+        entry: path.join(__dirname, '../lambda/manageProfile.ts'),
+        handler: 'handler',
+        environment: {
+          USERS_TABLE_NAME: usersTable.tableName,
+          USER_POOL_ID: userPool.userPoolId,
+          USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
+        },
+      }
+    );
 
     // Grant permissions to the profile handler Lambda
     usersTable.grantReadWriteData(manageProfileHandler);
 
-    // Grant permissions to query the GSI indexes for username and email uniqueness checks
-    manageProfileHandler.addToRolePolicy(new iam.PolicyStatement({
-      actions: [
-        'dynamodb:Query'
-      ],
-      resources: [
-        `${usersTable.tableArn}/index/username-index`,
-        `${usersTable.tableArn}/index/email-index`
-      ]
-    }));
+    // Grant permissions for user deletion - access to all tables
+    chatMessagesTable.grantReadWriteData(manageProfileHandler);
+    goalsTable.grantReadWriteData(manageProfileHandler);
+    tasksTable.grantReadWriteData(manageProfileHandler);
+    recurrenceRulesTable.grantReadWriteData(manageProfileHandler);
+    milestonesTable.grantReadWriteData(manageProfileHandler);
 
-    // Grant Cognito permissions for token verification
-    userPool.grant(manageProfileHandler, 'cognito-idp:GetUser');
+    // Grant permissions to query the GSI indexes for username and email uniqueness checks
+    manageProfileHandler.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['dynamodb:Query'],
+        resources: [
+          `${usersTable.tableArn}/index/username-index`,
+          `${usersTable.tableArn}/index/email-index`,
+        ],
+      })
+    );
+
+    // Grant Cognito permissions for token verification and user deletion
+    userPool.grant(
+      manageProfileHandler,
+      'cognito-idp:GetUser',
+      'cognito-idp:AdminDeleteUser'
+    );
+
+    // --- Custom Message Lambda Function for Cognito Email Customization ---
+    const customMessageFunction = new NodejsFunction(
+      this,
+      'CognitoCustomMessage',
+      {
+        ...commonLambdaProps,
+        entry: path.join(lambdaBaseDir, 'cognitoCustomMessage.ts'),
+        functionName: 'ZikBackend-CognitoCustomMessage',
+        description:
+          'Customizes Cognito email messages based on trigger source',
+        timeout: cdk.Duration.seconds(30),
+        environment: {
+          NODE_ENV: 'production',
+          LOG_LEVEL: 'info',
+        },
+      }
+    );
+
+    // Grant Cognito permissions to invoke the custom message function
+    customMessageFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: [
+          'logs:CreateLogGroup',
+          'logs:CreateLogStream',
+          'logs:PutLogEvents',
+        ],
+        resources: ['*'],
+      })
+    );
+
+    // Configure Lambda triggers for the User Pool
+    const cfnUserPool = userPool.node.defaultChild as cognito.CfnUserPool;
+    cfnUserPool.lambdaConfig = {
+      customMessage: customMessageFunction.functionArn,
+    };
+
+    // Grant Cognito permission to invoke the custom message function
+    customMessageFunction.addPermission('CognitoInvokePermission', {
+      principal: new iam.ServicePrincipal('cognito-idp.amazonaws.com'),
+      sourceArn: userPool.userPoolArn,
+    });
 
     // Create Cognito JWT Authorizer
     const cognitoAuthorizer = new HttpJwtAuthorizer(
@@ -539,6 +595,17 @@ export class ZikBackendStack extends cdk.Stack {
       authorizer: cognitoAuthorizer,
     });
 
+    // DELETE /profile - Delete user account and all associated data
+    httpApi.addRoutes({
+      path: '/profile',
+      methods: [apigatewayv2.HttpMethod.DELETE],
+      integration: new HttpLambdaIntegration(
+        'DeleteProfileIntegration',
+        manageProfileHandler
+      ),
+      authorizer: cognitoAuthorizer,
+    });
+
     // --- Chat Handler Lambda - Handles AI-powered chat interactions ---
     const chatHandler = new NodejsFunction(this, 'ChatHandler', {
       ...commonLambdaProps,
@@ -591,19 +658,23 @@ export class ZikBackendStack extends cdk.Stack {
     });
 
     // --- Chat History Management Lambda - Handles reading and deleting chat history ---
-    const manageChatHistoryHandler = new NodejsFunction(this, 'ManageChatHistoryHandler', {
-      ...commonLambdaProps,
-      entry: path.join(lambdaBaseDir, 'manageChatHistory.ts'),
-      handler: 'handler',
-      environment: {
-        CHAT_MESSAGES_TABLE_NAME: chatMessagesTable.tableName,
-        USERS_TABLE_NAME: usersTable.tableName,
-        GOALS_TABLE_NAME: goalsTable.tableName,
-        TASKS_TABLE_NAME: tasksTable.tableName,
-        USER_POOL_ID: userPool.userPoolId,
-        USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
-      },
-    });
+    const manageChatHistoryHandler = new NodejsFunction(
+      this,
+      'ManageChatHistoryHandler',
+      {
+        ...commonLambdaProps,
+        entry: path.join(lambdaBaseDir, 'manageChatHistory.ts'),
+        handler: 'handler',
+        environment: {
+          CHAT_MESSAGES_TABLE_NAME: chatMessagesTable.tableName,
+          USERS_TABLE_NAME: usersTable.tableName,
+          GOALS_TABLE_NAME: goalsTable.tableName,
+          TASKS_TABLE_NAME: tasksTable.tableName,
+          USER_POOL_ID: userPool.userPoolId,
+          USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
+        },
+      }
+    );
 
     // Grant permissions to the chat history management Lambda
     chatMessagesTable.grantReadWriteData(manageChatHistoryHandler);
@@ -616,14 +687,20 @@ export class ZikBackendStack extends cdk.Stack {
     httpApi.addRoutes({
       path: '/chat-history',
       methods: [apigatewayv2.HttpMethod.GET],
-      integration: new HttpLambdaIntegration('GetChatHistoryIntegration', manageChatHistoryHandler),
+      integration: new HttpLambdaIntegration(
+        'GetChatHistoryIntegration',
+        manageChatHistoryHandler
+      ),
       authorizer: cognitoAuthorizer,
     });
 
     httpApi.addRoutes({
       path: '/chat-history',
       methods: [apigatewayv2.HttpMethod.DELETE],
-      integration: new HttpLambdaIntegration('DeleteChatHistoryIntegration', manageChatHistoryHandler),
+      integration: new HttpLambdaIntegration(
+        'DeleteChatHistoryIntegration',
+        manageChatHistoryHandler
+      ),
       authorizer: cognitoAuthorizer,
     });
 
@@ -721,7 +798,10 @@ export class ZikBackendStack extends cdk.Stack {
       'DailyQuestGeneratorLambda',
       {
         ...commonLambdaProps,
-        entry: path.join(__dirname, '../src/lambda/dailyQuestGenerator/index.ts'),
+        entry: path.join(
+          __dirname,
+          '../src/lambda/dailyQuestGenerator/index.ts'
+        ),
         handler: 'handler',
         environment: {
           CHAT_MESSAGES_TABLE_NAME: chatMessagesTable.tableName,
@@ -771,22 +851,34 @@ export class ZikBackendStack extends cdk.Stack {
     );
 
     // Define Step Function State Machine for Roadmap Generation Workflow
-    const generateRoadmapTask = new stepfunctionsTasks.LambdaInvoke(this, 'GenerateRoadmapTask', {
-      lambdaFunction: roadmapGeneratorLambda,
-      resultPath: '$.roadmapResult',
-    });
+    const generateRoadmapTask = new stepfunctionsTasks.LambdaInvoke(
+      this,
+      'GenerateRoadmapTask',
+      {
+        lambdaFunction: roadmapGeneratorLambda,
+        resultPath: '$.roadmapResult',
+      }
+    );
 
-    const saveMilestonesTask = new stepfunctionsTasks.LambdaInvoke(this, 'SaveMilestonesTask', {
-      lambdaFunction: milestoneSaverLambda,
-      inputPath: '$.roadmapResult.Payload',
-      resultPath: '$.saveResult',
-    });
+    const saveMilestonesTask = new stepfunctionsTasks.LambdaInvoke(
+      this,
+      'SaveMilestonesTask',
+      {
+        lambdaFunction: milestoneSaverLambda,
+        inputPath: '$.roadmapResult.Payload',
+        resultPath: '$.saveResult',
+      }
+    );
 
-    const generateInitialQuestsTask = new stepfunctionsTasks.LambdaInvoke(this, 'GenerateInitialQuestsTask', {
-      lambdaFunction: dailyQuestGeneratorLambda,
-      inputPath: '$.saveResult.Payload',
-      resultPath: '$.questsResult',
-    });
+    const generateInitialQuestsTask = new stepfunctionsTasks.LambdaInvoke(
+      this,
+      'GenerateInitialQuestsTask',
+      {
+        lambdaFunction: dailyQuestGeneratorLambda,
+        inputPath: '$.saveResult.Payload',
+        resultPath: '$.questsResult',
+      }
+    );
 
     // Define the workflow chain
     const definition = generateRoadmapTask
@@ -794,10 +886,14 @@ export class ZikBackendStack extends cdk.Stack {
       .next(generateInitialQuestsTask);
 
     // Create the Step Function State Machine
-    const roadmapGeneratorWorkflow = new stepfunctions.StateMachine(this, 'RoadmapGeneratorWorkflow', {
-      definition,
-      timeout: Duration.minutes(15), // Overall workflow timeout
-    });
+    const roadmapGeneratorWorkflow = new stepfunctions.StateMachine(
+      this,
+      'RoadmapGeneratorWorkflow',
+      {
+        definition,
+        timeout: Duration.minutes(15), // Overall workflow timeout
+      }
+    );
 
     // Grant the Step Function permission to invoke the Lambdas
     roadmapGeneratorLambda.grantInvoke(roadmapGeneratorWorkflow);
@@ -809,12 +905,24 @@ export class ZikBackendStack extends cdk.Stack {
     roadmapGeneratorWorkflow.grantStartExecution(manageQuestsHandler);
 
     // Update environment variables with ARNs (using addEnvironment after creation)
-    chatHandler.addEnvironment('ROADMAP_GENERATOR_WORKFLOW_ARN', roadmapGeneratorWorkflow.stateMachineArn);
-    chatHandler.addEnvironment('DAILY_QUEST_GENERATOR_LAMBDA_ARN', dailyQuestGeneratorLambda.functionArn);
+    chatHandler.addEnvironment(
+      'ROADMAP_GENERATOR_WORKFLOW_ARN',
+      roadmapGeneratorWorkflow.stateMachineArn
+    );
+    chatHandler.addEnvironment(
+      'DAILY_QUEST_GENERATOR_LAMBDA_ARN',
+      dailyQuestGeneratorLambda.functionArn
+    );
 
     // Add environment variables to manageQuestsHandler as well
-    manageQuestsHandler.addEnvironment('ROADMAP_GENERATOR_WORKFLOW_ARN', roadmapGeneratorWorkflow.stateMachineArn);
-    manageQuestsHandler.addEnvironment('DAILY_QUEST_GENERATOR_LAMBDA_ARN', dailyQuestGeneratorLambda.functionArn);
+    manageQuestsHandler.addEnvironment(
+      'ROADMAP_GENERATOR_WORKFLOW_ARN',
+      roadmapGeneratorWorkflow.stateMachineArn
+    );
+    manageQuestsHandler.addEnvironment(
+      'DAILY_QUEST_GENERATOR_LAMBDA_ARN',
+      dailyQuestGeneratorLambda.functionArn
+    );
 
     // Grant chatHandler permission to invoke the daily quest generator directly
     dailyQuestGeneratorLambda.grantInvoke(chatHandler);

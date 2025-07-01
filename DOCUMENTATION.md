@@ -11,29 +11,33 @@
 7. [Environment & Configuration](#environment--configuration)
 8. [Testing](#testing)
 9. [Utilities](#utilities)
-10. [Known Issues & Troubleshooting](#known-issues--troubleshooting)
-11. [Development & Contribution](#development--contribution)
+10. [Security Considerations](#security-considerations)
+11. [Environment Variables](#environment-variables)
 
 ---
 
 ## 1. Overview
 
-The Zik backend is a modern, serverless, event-driven system built on AWS. It powers the Zik AI life companion app, enabling users to manage long-term goals (Epic Quests), daily tasks, and recurring habits through cVonversational AI and automation. 
+The Zik backend is a modern, serverless, event-driven system built on AWS. It powers the Zik AI life companion app, enabling users to manage long-term goals (Epic Quests), daily tasks, and recurring habits through cVonversational AI and automation.
 
 **Key Features:**
+
 - **Epic Quest & Roadmap System**: AI-powered goal breakdown into achievable milestones
 - **Just-in-Time Task Generation**: Daily quests created exactly when needed
 - **Intelligent Milestone Progression**: Automatic advancement through goal roadmaps
 - **Conversational AI Interface**: Natural language interaction with Bedrock Claude
 - **Chat History Management**: Persistent conversation storage with cleanup capabilities
 - **User Profile System**: Comprehensive user management with onboarding flow
+- **Account Deletion**: Secure, permanent account deletion with complete data removal
 
-**Current Status (2025-06-28):**
+**Current Status (2025-07-01):**
+
 - ✅ Core API endpoints fully operational
 - ✅ Chat history management recently fixed and working
 - ✅ Profile management system implemented
 - ✅ All database operations and CRUD functionality working
 - ✅ Comprehensive test utilities available
+- ✅ Account deletion functionality implemented
 
 The backend is designed for scalability, maintainability, and testability, using a clean architecture and AWS best practices.
 
@@ -163,6 +167,11 @@ Authorization: Bearer <JWT_ACCESS_TOKEN>
 - **POST /profile**: Create/initialize user profile. `{ firstName, lastName, preferences, ... }`
 - **PUT /profile**: Update profile information. `{ ...fields }`
 - **PUT /profile/onboarding/complete**: Mark user onboarding as completed.
+- **DELETE /profile**: Permanently delete user account and ALL associated data.
+  - **⚠️ CRITICAL**: This is a permanent operation with no recovery mechanism
+  - **Security**: Requires valid authentication token
+  - **Action**: Removes user profile, goals, tasks, milestones, chat history, and recurrence rules
+  - **Response**: `{ "message": "User account and all associated data have been permanently deleted" }`
 
 ### 3.6. Recurrence Rules (Proactive Engine)
 
@@ -238,12 +247,12 @@ interface Goal {
 
 ```ts
 interface Milestone {
-  epicId: string;        // The goalId of the parent Epic Quest (Partition Key)
-  sequence: number;      // Order in the roadmap (Sort Key)
-  milestoneId: string;   // Unique ID for the milestone
-  userId: string;        // The ID of the user who owns it
-  title: string;         // e.g., "Week 1: Master Basic Chords"
-  description?: string;  // e.g., "Focus on G, C, and D chords and smooth transitions"
+  epicId: string; // The goalId of the parent Epic Quest (Partition Key)
+  sequence: number; // Order in the roadmap (Sort Key)
+  milestoneId: string; // Unique ID for the milestone
+  userId: string; // The ID of the user who owns it
+  title: string; // e.g., "Week 1: Master Basic Chords"
+  description?: string; // e.g., "Focus on G, C, and D chords and smooth transitions"
   status: 'locked' | 'active' | 'completed'; // Progress tracking
   durationInDays: number; // Estimated duration for this milestone
   createdAt: string;
@@ -262,7 +271,7 @@ interface Task {
   dueDate: string;
   priority: 'low' | 'medium' | 'high';
   status: 'pending' | 'in-progress' | 'completed';
-  goalId?: string;      // Optional link to parent Epic Quest
+  goalId?: string; // Optional link to parent Epic Quest
   milestoneId?: string; // NEW: Optional link to parent Milestone
   createdAt: string;
   updatedAt: string;
@@ -399,21 +408,24 @@ The Epic Quest & Roadmap System is an AI-powered feature that automatically brea
 ### Components
 
 #### 1. Planner AI (Roadmap Generation)
+
 - **Purpose**: Analyzes Epic Quests and creates 3-7 logical milestones
 - **Technology**: Amazon Bedrock (Claude 3 Haiku)
 - **Trigger**: Automatically triggered when complex goals are created
 - **Processing**: Asynchronous via AWS Step Functions
 
-#### 2. Coach AI (Daily Quest Generation)  
+#### 2. Coach AI (Daily Quest Generation)
+
 - **Purpose**: Creates specific, actionable daily tasks for active milestones
 - **Technology**: Amazon Bedrock (Claude 3 Haiku)
 - **Trigger**: When milestones become active or when milestone progression occurs
 - **Processing**: Just-in-time generation
 
 #### 3. Milestone Progression Engine
+
 - **Purpose**: Manages progression through roadmap milestones
 - **Trigger**: When all tasks in a milestone are completed
-- **Actions**: 
+- **Actions**:
   - Mark current milestone as completed
   - Activate next milestone
   - Generate new daily tasks for next milestone
@@ -422,16 +434,19 @@ The Epic Quest & Roadmap System is an AI-powered feature that automatically brea
 ### Workflow
 
 1. **Epic Quest Creation**
+
    ```
    User creates goal → AI detects complexity → Roadmap generation triggered
    ```
 
 2. **Roadmap Generation** (Step Function)
+
    ```
    Planner AI → Generate milestones → Save to database → Generate initial tasks
    ```
 
 3. **Daily Quest Management**
+
    ```
    Active milestone → Coach AI → Daily tasks → User completion → Progression check
    ```
@@ -444,16 +459,19 @@ The Epic Quest & Roadmap System is an AI-powered feature that automatically brea
 ### Status Management
 
 **Goal roadmapStatus:**
+
 - `"none"`: Default state, no roadmap needed
 - `"generating"`: AI is creating the roadmap (30-60 seconds)
 - `"ready"`: Roadmap complete, milestones available
 
 **Milestone status:**
+
 - `"locked"`: Not yet available (previous milestones must be completed)
 - `"active"`: Currently in progress (has daily tasks)
 - `"completed"`: All tasks finished, progression ready
 
 ---
+
 - Recurrence rules can reference a `goalId` (optional).
 
 **Indexes:**
@@ -509,6 +527,7 @@ The Zik backend leverages Amazon Bedrock (Claude 3 Haiku) to provide an intellig
   - `updateFields` (required for update): Fields to update (object)
 
 **Epic Quest Creation Enhancement:**
+
 - When creating complex Epic Quests, the system automatically triggers roadmap generation
 - The AI responds with confirmation and roadmap generation status
 - Background Step Function workflow creates personalized milestones and initial daily tasks
@@ -516,18 +535,21 @@ The Zik backend leverages Amazon Bedrock (Claude 3 Haiku) to provide an intellig
 ### AI-Powered Features
 
 #### Roadmap Generation (Planner AI)
+
 - **Trigger**: Complex Epic Quest creation
 - **Process**: Bedrock Claude analyzes goal and creates 3-7 logical milestones
 - **Output**: Structured roadmap with realistic timeframes and descriptions
 - **Status**: Tracked via `roadmapStatus` field on goals
 
 #### Daily Quest Generation (Coach AI)
+
 - **Trigger**: Milestone activation or progression
 - **Process**: Bedrock Claude creates specific, actionable daily tasks
 - **Output**: Time-bounded tasks (30-90 minutes each) that build toward milestone completion
 - **Timing**: Just-in-time generation when milestones become active
 
 #### Milestone Progression
+
 - **Trigger**: Task completion that results in milestone completion
 - **Process**: Automatic status updates and next milestone activation
 - **Intelligence**: System detects when all milestone tasks are complete
@@ -626,12 +648,14 @@ For more, see the system prompt and tool definitions in `src/services/bedrockSer
 ### Key Infrastructure Components
 
 #### Step Functions
+
 - **RoadmapGeneratorWorkflow**: Orchestrates roadmap creation
   - `RoadmapGeneratorLambda`: Planner AI processing
   - `MilestoneSaverLambda`: Milestone persistence
   - `DailyQuestGeneratorLambda`: Initial task generation
 
 #### Lambda Functions
+
 - **ChatHandler**: Main conversational interface
 - **ManageGoalsHandler**: Goal and milestone management
 - **ManageQuestsHandler**: Task management with milestone progression
@@ -652,16 +676,19 @@ For more, see the system prompt and tool definitions in `src/services/bedrockSer
 ### Deployment Information
 
 **Current Live Environment:**
+
 - **API Endpoint**: `https://h5k4oat3hi.execute-api.us-east-1.amazonaws.com/`
 - **AWS Region**: `us-east-1`
 - **Deployment Status**: Fully operational with Epic Quest & Roadmap features enabled
 
 **Deployment Command:**
+
 ```bash
 npx cdk deploy --require-approval never
 ```
 
 **Build Command:**
+
 ```bash
 npm run build
 ```
@@ -685,18 +712,42 @@ npm run build
 - **Error Classes** (`src/utils/errors.ts`): Custom error types for validation, auth, database, Bedrock, not found. All error types map to appropriate HTTP status codes and user-friendly messages.
 - **Response Helpers** (`src/utils/responses.ts`): Standardized API Gateway responses with CORS and error formatting.
 
+---
 
-# Example Environment Variables for Zik Backend
+## 10. Security Considerations
+
+### Account Deletion
+
+- **Permanent Operation**: The DELETE `/profile` endpoint permanently removes all user data with no recovery mechanism
+- **Authentication Required**: Endpoint requires valid JWT token, user can only delete their own account
+- **Complete Data Removal**: Deletes all associated data across all tables (profile, goals, tasks, milestones, chat history, recurrence rules)
+- **Frontend Responsibility**: Frontend must implement proper confirmation flows to prevent accidental deletions
+- **Audit Trail**: Deletion operations are logged for monitoring purposes
+
+### Data Security
+
+- **User Isolation**: All operations are strictly scoped to the authenticated user (no cross-user access)
+- **Token Validation**: All endpoints validate JWT tokens against AWS Cognito
+- **Error Handling**: Sensitive information is never exposed in error messages
+- **Logging**: All operations include requestId for debugging without exposing user data
+
+---
+
+## 11. Environment Variables
+
 # Copy this section to your .env file and update with your actual values
 
 # API Gateway
+
 API_ENDPOINT=https://your-api-id.execute-api.us-east-1.amazonaws.com/
 
-# Cognito Configuration  
+# Cognito Configuration
+
 USER_POOL_ID=us-east-1_YOUR_POOL_ID
 USER_POOL_CLIENT_ID=your-client-id
 
 # DynamoDB Table Names (generated by CDK)
+
 CHAT_MESSAGES_TABLE_NAME=ZikBackendStack-ChatMessagesTable-XXXXX
 GOALS_TABLE_NAME=ZikBackendStack-GoalsTable-XXXXX
 TASKS_TABLE_NAME=ZikBackendStack-TasksTable-XXXXX
@@ -705,19 +756,24 @@ RECURRENCE_RULES_TABLE_NAME=ZikBackendStack-RecurrenceRulesTable-XXXXX
 MILESTONES_TABLE_NAME=ZikBackendStack-MilestonesTable-XXXXX
 
 # DynamoDB Indexes
+
 USER_ID_DUE_DATE_INDEX=userId-dueDate-index
 
 # AWS Configuration
+
 AWS_REGION=us-east-1
 AWS_ACCOUNT_ID=your-aws-account-id
 
 # Step Functions & Lambda ARNs (generated by CDK)
+
 ROADMAP_GENERATOR_WORKFLOW_ARN=arn:aws:states:us-east-1:YOUR_ACCOUNT:stateMachine:RoadmapGeneratorWorkflow-XXXXX
 DAILY_QUEST_GENERATOR_LAMBDA_ARN=arn:aws:lambda:us-east-1:YOUR_ACCOUNT:function:ZikBackendStack-DailyQuestGenerator-XXXXX
 
 # Stack Information
+
 STACK_ARN=arn:aws:cloudformation:us-east-1:YOUR_ACCOUNT:stack/ZikBackendStack/XXXXX
 
 # Bedrock Configuration
+
 BEDROCK_REGION=us-east-1
 BEDROCK_MODEL_ID=us.anthropic.claude-3-haiku-20240307-v1:0
